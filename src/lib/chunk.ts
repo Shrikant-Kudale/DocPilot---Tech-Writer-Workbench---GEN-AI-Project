@@ -9,12 +9,13 @@ export interface DocChunk {
   heading: string;
   content: string;
   tokens: number;
+  wordCount?: number;
   createdAt: string;
   embedding?: number[];
 }
 
 /**
- * Estimates token count based on standard English word count and punctuation heuristics (~1.3 tokens per word).
+ * Estimates word count and token count heuristics (~1.3 tokens per word).
  */
 export function estimateTokens(text: string): number {
   if (!text) return 0;
@@ -22,8 +23,13 @@ export function estimateTokens(text: string): number {
   return Math.round(words.length * 1.3);
 }
 
+export function countWords(text: string): number {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
 /**
- * Splits a markdown document into logical chunks respecting heading hierarchy
+ * Splits a markdown document or plain text into logical chunks respecting heading hierarchy
  * with a target token window (default 500) and overlap (default 50).
  */
 export function chunkMarkdown(
@@ -34,10 +40,16 @@ export function chunkMarkdown(
 ): DocChunk[] {
   if (!markdown || !markdown.trim()) return [];
 
+  // Default fallback heading derived from friendly filename
+  const friendlyFileTitle = file
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[-_]/g, ' ')
+    .trim();
+
   const lines = markdown.split('\n');
   const sections: { heading: string; lines: string[] }[] = [];
 
-  let currentHeading = 'Overview';
+  let currentHeading = friendlyFileTitle || 'Document Overview';
   let currentLines: string[] = [];
 
   for (const line of lines) {
@@ -70,6 +82,7 @@ export function chunkMarkdown(
   for (const section of sections) {
     const sectionText = section.lines.join('\n').trim();
     const sectionTokens = estimateTokens(sectionText);
+    const sectionWords = countWords(sectionText);
 
     if (sectionTokens <= targetTokens) {
       if (sectionText.length > 0) {
@@ -79,6 +92,7 @@ export function chunkMarkdown(
           heading: section.heading,
           content: sectionText,
           tokens: sectionTokens,
+          wordCount: sectionWords,
           createdAt: new Date().toISOString(),
         });
       }
@@ -87,20 +101,24 @@ export function chunkMarkdown(
       const paragraphs = sectionText.split(/\n\n+/);
       let windowText = '';
       let windowTokens = 0;
+      let partNumber = 1;
 
       for (let i = 0; i < paragraphs.length; i++) {
         const p = paragraphs[i];
         const pTokens = estimateTokens(p);
 
         if (windowTokens + pTokens > targetTokens && windowText.trim().length > 0) {
+          const partSuffix = partNumber > 1 ? ` (Part ${partNumber})` : '';
           chunks.push({
             id: `chunk-${cleanId(file)}-${chunkIndex++}`,
             file,
-            heading: section.heading,
+            heading: `${section.heading}${partSuffix}`,
             content: windowText.trim(),
             tokens: windowTokens,
+            wordCount: countWords(windowText),
             createdAt: new Date().toISOString(),
           });
+          partNumber++;
 
           // Retain overlap from end of current window
           const prevLines = windowText.split('\n').filter(Boolean);
@@ -114,12 +132,14 @@ export function chunkMarkdown(
       }
 
       if (windowText.trim().length > 0) {
+        const partSuffix = partNumber > 1 ? ` (Part ${partNumber})` : '';
         chunks.push({
           id: `chunk-${cleanId(file)}-${chunkIndex++}`,
           file,
-          heading: section.heading,
+          heading: `${section.heading}${partSuffix}`,
           content: windowText.trim(),
           tokens: windowTokens,
+          wordCount: countWords(windowText),
           createdAt: new Date().toISOString(),
         });
       }

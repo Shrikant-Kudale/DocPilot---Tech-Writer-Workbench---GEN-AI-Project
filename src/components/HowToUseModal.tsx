@@ -41,47 +41,47 @@ export const HowToUseModal: React.FC<HowToUseModalProps> = ({
   const sections = [
     {
       id: 'getting-started',
-      title: 'Getting Started',
+      title: 'Getting Started Guide',
       icon: <HelpCircle className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'kb',
-      title: 'Building Your Knowledge Base',
+      title: 'Document Library (Upload PDF/Word/MD)',
       icon: <Database className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'ask',
-      title: 'Asking the Docs',
+      title: 'Ask Documents (Plain Text Answers)',
       icon: <Search className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'lint',
-      title: 'Style Linter',
+      title: 'Writing & Style Check',
       icon: <Sparkles className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'rewrite',
-      title: 'Rewrite Assistant',
+      title: 'Smart Rewriter & Verification',
       icon: <FileEdit className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'prompt',
-      title: 'Prompt Lab',
+      title: 'Prompt Studio',
       icon: <Sliders className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'eval',
-      title: 'Evaluation Benchmark',
+      title: 'Accuracy Benchmark',
       icon: <CheckCircle2 className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'gap',
-      title: 'Gap Report',
+      title: 'Missing Topics Report',
       icon: <AlertCircle className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'auto',
-      title: 'Automation Tools',
+      title: 'Publishing & Summaries',
       icon: <Wrench className="w-4 h-4 text-[#00A3A1]" />,
     },
   ];

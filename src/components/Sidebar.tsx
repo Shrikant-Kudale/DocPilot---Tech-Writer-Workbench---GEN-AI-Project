@@ -6,7 +6,7 @@
 import React from 'react';
 import {
   Search,
-  Database,
+  BookOpen,
   Sparkles,
   FileEdit,
   Sliders,
@@ -57,59 +57,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const tabs: TabConfig[] = [
     {
       id: 'ask-docs',
-      label: 'Ask the Docs (RAG)',
+      label: 'Ask Documents',
       icon: <Search className="w-4 h-4 shrink-0" />,
-      description: 'Semantic citation search with fallback',
+      description: 'Search & ask questions in plain English',
     },
     {
       id: 'knowledge-base',
-      label: 'Knowledge Base',
-      icon: <Database className="w-4 h-4 shrink-0" />,
+      label: 'Document Library',
+      icon: <BookOpen className="w-4 h-4 shrink-0" />,
       badge: totalChunksCount > 0 ? `${totalChunksCount}` : undefined,
-      description: 'Chunk and embed documentation',
+      description: 'Upload PDF, Word, and text files',
     },
     {
       id: 'style-linter',
-      label: 'Style Linter',
+      label: 'Writing & Style Check',
       icon: <Sparkles className="w-4 h-4 shrink-0" />,
-      description: 'Terminology, passive voice & steps',
+      description: 'Check readability, tone & active voice',
     },
     {
       id: 'rewrite',
-      label: 'Rewrite Assistant',
+      label: 'Smart Rewriter',
       icon: <FileEdit className="w-4 h-4 shrink-0" />,
-      description: 'Dual view with human verification',
+      description: 'Improve clarity with human review',
     },
     {
       id: 'prompt-lab',
-      label: 'Prompt Lab',
+      label: 'Prompt Studio',
       icon: <Sliders className="w-4 h-4 shrink-0" />,
-      description: 'Version testing & hallucination flags',
+      description: 'Test custom writing instructions',
     },
     {
       id: 'evaluation',
-      label: 'Evaluation',
+      label: 'Accuracy Benchmark',
       icon: <CheckCircle2 className="w-4 h-4 shrink-0" />,
-      description: 'Golden benchmark retrieval hit & accuracy',
+      description: 'Test search accuracy on sample questions',
     },
     {
       id: 'gap-report',
-      label: 'Gap Report',
+      label: 'Missing Topics Report',
       icon: <AlertCircle className="w-4 h-4 shrink-0" />,
       badge: unresolvedGapsCount > 0 ? `${unresolvedGapsCount}` : undefined,
-      description: 'Unanswered queries & missing docs',
+      description: 'See questions your docs don\'t answer yet',
     },
     {
       id: 'automation',
-      label: 'Automation',
+      label: 'Publishing & Summaries',
       icon: <Wrench className="w-4 h-4 shrink-0" />,
-      description: 'Links, metadata & release notes',
+      description: 'Generate release summaries and check links',
     },
     {
       id: 'about',
-      label: 'About & AI Disclosure',
+      label: 'Guide & Principles',
       icon: <Info className="w-4 h-4 shrink-0" />,
-      description: 'Human-in-the-loop policies & architecture',
+      description: 'Tips for writers and user policies',
     },
   ];
 
@@ -125,8 +125,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="font-semibold text-white tracking-tight leading-none text-base">
               DocPilot
             </div>
-            <div className="text-[10px] text-teal-300 font-mono mt-1 tracking-wider uppercase">
-              Tech Writer Workbench
+            <div className="text-[10px] text-teal-300 font-medium mt-1 tracking-wider uppercase">
+              Writer's Workbench
             </div>
           </div>
         </div>
@@ -134,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Mobile close button */}
         <button
           onClick={onCloseMobile}
-          className="md:hidden p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+          className="md:hidden p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-md transition-colors cursor-pointer"
           aria-label="Close sidebar"
         >
           <X className="w-5 h-5" />
@@ -144,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Navigation list */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 scrollbar-thin scrollbar-thumb-white/10">
         <div className="px-3 pb-2 text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-          Workbench Modules
+          Writer Tools
         </div>
 
         {tabs.map((tab) => {
@@ -196,15 +196,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#2E9E6B] animate-pulse" />
-            <span className="text-slate-200 font-medium text-xs">Knowledge Base Ready</span>
+            <span className="text-slate-200 font-medium text-xs">Library Ready</span>
           </div>
           <span className="text-[11px] font-mono text-teal-300 bg-teal-950/80 px-2 py-0.5 rounded border border-teal-800/40">
-            {totalChunksCount} docs indexed
+            {totalChunksCount} sections
           </span>
         </div>
         <div className="mt-2 text-[11px] text-slate-400 flex items-center justify-between">
-          <span>Search Accuracy:</span>
-          <span className="text-slate-200 font-medium">Relevance verified</span>
+          <span>Search mode:</span>
+          <span className="text-slate-200 font-medium">Plain Text Answers</span>
         </div>
       </div>
     </div>

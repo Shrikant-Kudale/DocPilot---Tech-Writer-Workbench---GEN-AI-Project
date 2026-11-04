@@ -3,22 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Search,
   Sparkles,
   AlertTriangle,
   FileText,
-  ExternalLink,
   BookOpen,
-  ArrowRight,
-  HelpCircle,
   Copy,
   Check,
   ChevronDown,
   ChevronUp,
-  Info,
-  ShieldCheck,
+  HelpCircle,
+  FileCheck2,
+  FileSpreadsheet,
+  Layers,
+  ArrowRight,
+  Eye,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -26,6 +27,31 @@ import { Badge } from '../components/Badge';
 import { useToast } from '../components/Toast';
 import { useDocStore } from '../lib/store';
 import { rankChunks, textToVectorFallback, ScoredChunk } from '../lib/similarity';
+
+// Utility to clean markdown formatting into pure human-readable plain text
+function cleanToPlainText(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .replace(/^#{1,6}\s+(.*)$/gm, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/```[a-z]*\n([\s\S]*?)```/gi, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\[\s*\d+\s*\]/g, '')
+    .replace(/\\([()[\]\\/`*_#+-])/g, '$1')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\|\s*[-:]+[-|\s:]*\|/g, '')
+    .replace(/\|/g, ' ')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 interface AskDocsProps {
   onNavigateToTab?: (tabId: string) => void;
@@ -43,19 +69,46 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
   const [isLowConfidence, setIsLowConfidence] = useState(false);
   const [copied, setCopied] = useState(false);
   const [expandedChunkId, setExpandedChunkId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'plain' | 'formatted'>('plain');
 
-  const sampleQuestions = [
-    'How do I authenticate API requests?',
-    'What is the webhook retry policy for failed deliveries?',
-    'What are the default rate limits for Tier 1 accounts?',
-    'How do I verify webhook HMAC signatures in Python?',
-    'What SDK client libraries are available?',
-  ];
+  const chunks = store.getChunks();
+
+  // Dynamically tailor sample questions based on documents loaded in the library
+  const dynamicSampleQuestions = useMemo(() => {
+    const fileNames = chunks.map((c) => c.file.toLowerCase());
+    const isExplainingPdf = fileNames.some((f) => f.includes('explain') || f.includes('complex'));
+    const isWebhook = fileNames.some((f) => f.includes('webhook'));
+
+    if (isExplainingPdf) {
+      return [
+        'How do I explain complex ideas simply?',
+        'What are the key principles of clear communication?',
+        'What makes an explanation confusing for readers?',
+        'How does simplicity begin with understanding?',
+      ];
+    }
+
+    if (isWebhook) {
+      return [
+        'How do I authenticate API requests?',
+        'What is the webhook retry policy for failed deliveries?',
+        'What are the default rate limits for standard accounts?',
+        'How do I verify webhook security signatures?',
+      ];
+    }
+
+    // Default friendly general questions
+    return [
+      'What are the main topics covered in the uploaded documents?',
+      'How do I get started with the instructions in these docs?',
+      'What are the important guidelines or recommendations?',
+    ];
+  }, [chunks]);
 
   const handleAsk = async (queryToAsk?: string) => {
     const q = (queryToAsk !== undefined ? queryToAsk : question).trim();
     if (!q) {
-      toast.warning('Please enter a documentation question.');
+      toast.warning('Please type a question to ask.');
       return;
     }
 
@@ -72,12 +125,12 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
     try {
       const allChunks = store.getChunks();
       if (allChunks.length === 0) {
-        toast.error('Knowledge Base is empty. Upload files in the Knowledge Base tab.');
+        toast.error('Your document library is empty. Please upload files in the Document Library tab.');
         setIsLoading(false);
         return;
       }
 
-      // Step 1: Obtain query embedding
+      // Step 1: Query embedding
       let queryEmbedding: number[] = [];
       try {
         const embedRes = await fetch('/api/embed', {
@@ -92,14 +145,14 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
           }
         }
       } catch (err) {
-        console.warn('API embed query failed, using hybrid text projection:', err);
+        console.warn('API embed query failed, using hybrid vector fallback:', err);
       }
 
       if (queryEmbedding.length === 0) {
         queryEmbedding = textToVectorFallback(q);
       }
 
-      // Step 2: Hybrid search ranking (Vector similarity + Keyword + Heading matches)
+      // Step 2: Search ranking (Vector similarity + Keyword + Heading matches)
       const { ranked, topSimilarity: maxSim } = rankChunks(
         queryEmbedding,
         allChunks,
@@ -109,12 +162,12 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
 
       setTopSimilarity(maxSim);
 
-      // Always retrieve the top matching chunks
+      // Top matching sections
       const topContextChunks = ranked.slice(0, 3);
       setMatchedChunks(topContextChunks);
 
-      // Flag low confidence advisory if below 0.55, and log to Gap Report
-      if (maxSim < 0.55) {
+      // Flag low confidence advisory if relevance is low
+      if (maxSim < 0.5) {
         setIsLowConfidence(true);
         store.logGap(q, maxSim);
       }
@@ -128,8 +181,8 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
           body: JSON.stringify({
             action: 'rag_answer',
             question: q,
-            contextChunks: topContextChunks.map((c) => ({
-              citationIndex: c.citationIndex || 1,
+            contextChunks: topContextChunks.map((c, index) => ({
+              citationIndex: index + 1,
               file: c.file,
               heading: c.heading,
               content: c.content,
@@ -142,24 +195,35 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
           generatedAnswer = chatData.answer;
         }
       } catch (err) {
-        console.warn('Server chat route unavailable, using client-side RAG synthesis:', err);
+        console.warn('Server chat route unavailable, using local synthesis:', err);
       }
 
-      // Resilient local synthesis fallback if server was unreachable or error on Vercel
-      if (!generatedAnswer) {
+      // Plain text local fallback if server was unreachable
+      if (!generatedAnswer && topContextChunks.length > 0) {
         const top = topContextChunks[0];
-        generatedAnswer = `According to **${top.heading}** in \`${top.file}\` [1]:\n\n${top.content.slice(0, 420)}...\n\nRefer to source citation [1] below for the complete section details.`;
+        const cleanContent = cleanToPlainText(top.content);
+        const friendlyName = top.file.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+
+        const sentences = cleanContent
+          .split(/(?<=[.!?])\s+/)
+          .filter((s) => s.length > 20 && !s.startsWith('#'));
+
+        const summary = sentences.slice(0, 4).join(' ');
+
+        generatedAnswer = `According to "${friendlyName}" (Section: "${top.heading}"):\n\n${
+          summary || cleanContent.slice(0, 300)
+        }\n\nYou can review the exact source excerpts in the citations section below.`;
       }
 
-      setAnswer(generatedAnswer);
-      if (maxSim >= 0.55) {
-        toast.success('Retrieved matching sections and generated answer.');
+      setAnswer(cleanToPlainText(generatedAnswer));
+      if (maxSim >= 0.5) {
+        toast.success('Found matching information and composed answer.');
       } else {
-        toast.info('Retrieved closest matching sections for human review.');
+        toast.info('Found closest matching sections for review.');
       }
     } catch (err: any) {
       console.error('Ask docs error:', err);
-      toast.error(err.message || 'An error occurred while querying documentation.');
+      toast.error(err.message || 'An error occurred while querying your documents.');
     } finally {
       setIsLoading(false);
     }
@@ -167,9 +231,9 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
 
   const copyAnswer = () => {
     if (!answer) return;
-    navigator.clipboard.writeText(answer);
+    navigator.clipboard.writeText(cleanToPlainText(answer));
     setCopied(true);
-    toast.success('Answer copied to clipboard.');
+    toast.success('Plain text answer copied to clipboard.');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -178,15 +242,15 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
       {/* Intro Header */}
       <div>
         <h1 className="text-2xl font-semibold text-[#0B1F3A] tracking-tight">
-          Ask the Docs
+          Ask your Documents
         </h1>
         <p className="text-sm text-slate-600 mt-1">
-          Search your documentation with numbered source citations. All matching sections are retrieved for human review.
+          Ask questions in plain English and get clear, human-readable answers from your uploaded PDF, Word, and text documents.
         </p>
       </div>
 
       {/* Query Search Card */}
-      <Card padding="md" className="border-[#E2E8F0]">
+      <Card padding="md" className="border-[#E2E8F0] shadow-xs">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -201,30 +265,31 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
                 type="text"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask any question from your documentation..."
-                className="w-full h-10 pl-11 pr-4 rounded-[8px] border border-[#E2E8F0] bg-white text-sm text-[#1B2733] placeholder-slate-400 focus:outline-none focus:border-[#00A3A1] focus:ring-2 focus:ring-[#00A3A1]/20 transition-all"
+                placeholder="Ask any question about your documents in simple words..."
+                className="w-full h-11 pl-11 pr-4 rounded-lg border border-[#E2E8F0] bg-white text-sm text-[#1B2733] placeholder-slate-400 focus:outline-none focus:border-[#00A3A1] focus:ring-2 focus:ring-[#00A3A1]/20 transition-all"
               />
             </div>
             <Button
               type="submit"
               variant="primary"
+              size="md"
               isLoading={isLoading}
               icon={<Search className="w-4 h-4" />}
-              className="shrink-0 font-semibold"
+              className="shrink-0 font-medium px-5"
             >
-              Search & Answer
+              Get Answer
             </Button>
           </div>
 
-          {/* Quick sample chips */}
+          {/* Quick sample question chips */}
           <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-            <span className="text-slate-500 font-medium">Quick examples:</span>
-            {sampleQuestions.map((sq, i) => (
+            <span className="text-slate-500 font-medium">Try asking:</span>
+            {dynamicSampleQuestions.map((sq, i) => (
               <button
                 key={i}
                 type="button"
                 onClick={() => handleAsk(sq)}
-                className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-teal-50 hover:text-[#00A3A1] hover:border-teal-200 border border-slate-200 text-slate-600 transition-colors text-left cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-teal-50 hover:text-[#00A3A1] hover:border-teal-200 border border-slate-200 text-slate-700 transition-colors text-left cursor-pointer"
               >
                 {sq}
               </button>
@@ -233,27 +298,27 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
         </form>
       </Card>
 
-      {/* Low Confidence Advisory Banner (Does NOT block the answer!) */}
+      {/* Low Confidence Advisory Banner */}
       {isLowConfidence && answer && (
         <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/70 text-xs text-amber-900 flex items-start gap-3 animate-in fade-in">
           <AlertTriangle className="w-5 h-5 text-[#b07b00] shrink-0 mt-0.5" />
           <div className="flex-1 space-y-1">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-sm">
-                Human Review Recommended (Relevance: {topSimilarity ? (topSimilarity * 100).toFixed(0) : 0}%)
+                Partial or Indirect Match (Relevance: {topSimilarity ? (topSimilarity * 100).toFixed(0) : 0}%)
               </span>
               <Badge variant="warning" size="sm">
-                Low Confidence Match
+                Needs Writer Review
               </Badge>
             </div>
             <p className="text-amber-800 leading-relaxed">
-              The retrieved sections below have lower direct semantic overlap with your question. We are showing the closest matches so you can inspect them directly. This inquiry has also been saved to your <strong>Gap Report</strong>.
+              The available documents don't have an exact word-for-word answer to this question, but we found the closest related sections below. This topic has also been logged in your <strong>Missing Topics Report</strong> so you can add more content for it later.
             </p>
           </div>
         </div>
       )}
 
-      {/* Answer Card with Numbered Citations */}
+      {/* Answer Card with Plain Text Formatting */}
       {answer && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <Card
@@ -261,87 +326,132 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
             padding="md"
             title={
               <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-[#00A3A1]" />
-                <span>Grounded Documentation Answer</span>
+                <BookOpen className="w-5 h-5 text-[#00A3A1]" />
+                <span className="font-semibold text-base text-[#0B1F3A]">Answer from your Documents</span>
               </div>
             }
             headerAction={
               <div className="flex items-center gap-2">
+                <div className="flex items-center bg-slate-100 p-0.5 rounded-md text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('plain')}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                      viewMode === 'plain'
+                        ? 'bg-white shadow-xs font-semibold text-slate-900'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Plain Text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('formatted')}
+                    className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                      viewMode === 'formatted'
+                        ? 'bg-white shadow-xs font-semibold text-slate-900'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Reading View
+                  </button>
+                </div>
+
                 <Badge variant={isLowConfidence ? 'warning' : 'accent'} size="sm">
-                  Match Score: {topSimilarity ? (topSimilarity * 100).toFixed(0) : 0}%
+                  {topSimilarity ? (topSimilarity * 100).toFixed(0) : 0}% Match
                 </Badge>
+
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={copyAnswer}
                   icon={copied ? <Check className="w-3.5 h-3.5 text-[#2E9E6B]" /> : <Copy className="w-3.5 h-3.5" />}
                 >
-                  {copied ? 'Copied' : 'Copy'}
+                  {copied ? 'Copied' : 'Copy Text'}
                 </Button>
               </div>
             }
           >
-            <div className="prose prose-slate max-w-none text-sm text-[#1B2733] leading-relaxed whitespace-pre-wrap font-sans">
-              {answer}
+            {/* Clean plain-text presentation without markdown slashes, brackets or raw symbols */}
+            <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80">
+              <div className="text-sm text-slate-800 leading-relaxed font-sans space-y-3 whitespace-pre-line">
+                {answer}
+              </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-slate-400" />
-                Referenced {matchedChunks.length} source section{matchedChunks.length > 1 ? 's' : ''}
+            <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
+              <span className="flex items-center gap-1.5 font-medium">
+                <FileCheck2 className="w-4 h-4 text-[#00A3A1]" />
+                Answer synthesized from {matchedChunks.length} source section{matchedChunks.length > 1 ? 's' : ''}
               </span>
-              <span className="text-[11px] text-slate-400">
-                Grounded via Gemini RAG with citations
+              <span className="text-slate-400">
+                Formatted in clean plain English without code syntax or escape symbols
               </span>
             </div>
           </Card>
 
-          {/* Source Chunks with Clickable Numbered Citations */}
+          {/* Clean Source Citations Section */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-[#0B1F3A] flex items-center gap-2">
-                <FileText className="w-4 h-4 text-[#00A3A1]" />
-                <span>Source Citations (Review Matched Chunks)</span>
-              </h3>
-              <span className="text-xs text-slate-500">
-                Click any citation to review the source text
-              </span>
+              <div>
+                <h3 className="text-sm font-semibold text-[#0B1F3A] flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-[#00A3A1]" />
+                  <span>Where this answer came from (Source Citations)</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Click any document card below to read the original section excerpt.
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3">
-              {matchedChunks.map((chunk) => {
+              {matchedChunks.map((chunk, idx) => {
                 const isExpanded = expandedChunkId === chunk.id;
+                const isPdf = chunk.file.toLowerCase().endsWith('.pdf');
+                const isDoc = chunk.file.toLowerCase().endsWith('.docx') || chunk.file.toLowerCase().endsWith('.doc');
+                const cleanExcerpt = cleanToPlainText(chunk.content);
+
                 return (
                   <div
                     key={chunk.id}
-                    className="border border-[#E2E8F0] rounded-[10px] bg-white hover:border-[#00A3A1]/40 transition-colors shadow-xs overflow-hidden"
+                    className="border border-[#E2E8F0] rounded-xl bg-white hover:border-[#00A3A1]/50 transition-all shadow-xs overflow-hidden"
                   >
                     <div
                       onClick={() => setExpandedChunkId(isExpanded ? null : chunk.id)}
-                      className="p-4 flex items-center justify-between cursor-pointer select-none bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                      className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none bg-slate-50/40 hover:bg-slate-50 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="w-6 h-6 rounded-full bg-[#00A3A1] text-white text-xs font-bold flex items-center justify-center shrink-0">
-                          {chunk.citationIndex}
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
+                            isPdf
+                              ? 'bg-red-50 text-red-700 border border-red-200'
+                              : isDoc
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          {isPdf ? 'PDF' : isDoc ? 'Word' : 'Doc'}
                         </span>
+
                         <div className="truncate">
                           <span className="font-semibold text-sm text-[#0B1F3A]">
                             {chunk.heading}
                           </span>
-                          <span className="text-xs text-slate-400 ml-2">
-                            ({chunk.file})
+                          <span className="text-xs text-slate-500 ml-2">
+                            &bull; {chunk.file}
                           </span>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3 shrink-0">
                         <Badge
-                          variant={chunk.similarity >= 0.55 ? 'accent' : 'warning'}
+                          variant={chunk.similarity >= 0.5 ? 'accent' : 'warning'}
                           size="sm"
                         >
-                          {(chunk.similarity * 100).toFixed(0)}% match
+                          {(chunk.similarity * 100).toFixed(0)}% relevant
                         </Badge>
-                        <button className="text-slate-400 hover:text-slate-600 p-1">
+
+                        <button className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4" />
                           ) : (
@@ -352,13 +462,13 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
                     </div>
 
                     {isExpanded && (
-                      <div className="p-4 border-t border-[#E2E8F0] bg-white space-y-2 animate-in fade-in duration-150">
-                        <div className="text-xs font-mono text-slate-500 flex items-center justify-between">
-                          <span>Tokens: ~{chunk.tokens}</span>
-                          <span>Source file: {chunk.file}</span>
+                      <div className="p-4 border-t border-[#E2E8F0] bg-white space-y-3 animate-in fade-in duration-150">
+                        <div className="text-xs text-slate-500 flex items-center justify-between">
+                          <span className="font-medium">Original Text Excerpt:</span>
+                          <span>~{chunk.wordCount || Math.round(chunk.tokens / 1.3)} words</span>
                         </div>
-                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-mono text-slate-800 whitespace-pre-wrap max-h-60 overflow-y-auto">
-                          {chunk.content}
+                        <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-800 leading-relaxed whitespace-pre-line font-sans max-h-64 overflow-y-auto">
+                          {cleanExcerpt}
                         </div>
                       </div>
                     )}
@@ -372,16 +482,23 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
 
       {/* Empty State */}
       {!answer && !isLoading && (
-        <div className="py-12 border-2 border-dashed border-[#E2E8F0] rounded-[12px] bg-white/60 text-center flex flex-col items-center justify-center px-4">
+        <div className="py-14 border-2 border-dashed border-[#E2E8F0] rounded-xl bg-white/70 text-center flex flex-col items-center justify-center px-4">
           <div className="w-12 h-12 rounded-full bg-teal-50 text-[#00A3A1] flex items-center justify-center mb-3">
             <HelpCircle className="w-6 h-6" />
           </div>
-          <h3 className="text-sm font-semibold text-[#0B1F3A]">
-            Ready to query your documentation
+          <h3 className="text-base font-semibold text-[#0B1F3A]">
+            Ready to answer your questions
           </h3>
-          <p className="text-xs text-slate-500 max-w-md mt-1 leading-relaxed">
-            Enter any technical question above. DocPilot searches all uploaded PDF, Word, and Markdown sections, retrieves the best matches, and provides an answer citing exact source files.
+          <p className="text-xs text-slate-600 max-w-md mt-1.5 leading-relaxed">
+            Type any question in the box above. DocPilot searches through all your uploaded PDF, Word, and text documents, finds the relevant sections, and provides a clear answer in plain English.
           </p>
+
+          <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-[#2E9E6B]" />
+              {chunks.length} sections indexed and searchable
+            </span>
+          </div>
         </div>
       )}
     </div>

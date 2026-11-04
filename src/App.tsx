@@ -35,15 +35,15 @@ export default function App() {
   const unresolvedGapsCount = gaps.filter((g) => g.status === 'unresolved').length;
 
   const tabTitles: Record<TabId, string> = {
-    'ask-docs': 'Ask the Docs',
-    'knowledge-base': 'Knowledge Base',
-    'style-linter': 'Style Linter',
-    'rewrite': 'Rewrite Assistant',
-    'prompt-lab': 'Prompt Lab',
-    'evaluation': 'Evaluation',
-    'gap-report': 'Gap Report',
-    'automation': 'Automation',
-    'about': 'About & User Policy',
+    'ask-docs': 'Ask Documents',
+    'knowledge-base': 'Document Library',
+    'style-linter': 'Writing & Style Check',
+    'rewrite': 'Smart Rewriter',
+    'prompt-lab': 'Prompt Studio',
+    'evaluation': 'Accuracy Benchmark',
+    'gap-report': 'Missing Topics Report',
+    'automation': 'Publishing & Summaries',
+    'about': 'Guide & Principles',
   };
 
   const navigateToTab = (tabId: string) => {
