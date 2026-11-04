@@ -43,5 +43,14 @@
     "expectedHeading": "Requesting Quota Increases",
     "expectedKeywords": ["Enterprise tier", "support ticket", "burst allowance"],
     "category": "Billing & Quotas"
+  },
+  {
+    "id": "gold-6",
+    "question": "Tell me about the art of explaining complex things simply",
+    "expectedChunkId": "chunk-explaining-1",
+    "expectedFile": "The_Art_Of_Explaining_Complex_Things_Simply.md",
+    "expectedHeading": "The Art of Explaining Complex Things Simply",
+    "expectedKeywords": ["simplicity", "understanding", "reader", "complex", "clarity"],
+    "category": "Writing Principles"
   }
 ]

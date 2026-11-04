@@ -27,32 +27,9 @@ import { Badge } from '../components/Badge';
 import { useToast } from '../components/Toast';
 import { useDocStore } from '../lib/store';
 import { rankChunks, textToVectorFallback, ScoredChunk } from '../lib/similarity';
-import { isRawPdfBinary } from '../lib/pdfClient';
+import { isCorruptOrBinaryText, markdownToPurePlainText } from '../lib/cleanText';
 
-// Utility to clean markdown formatting into pure human-readable plain text
-function cleanToPlainText(raw: string): string {
-  if (!raw) return '';
-  return raw
-    .replace(/^#{1,6}\s+(.*)$/gm, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/_([^_]+)_/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/```[a-z]*\n([\s\S]*?)```/gi, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/\[\s*\d+\s*\]/g, '')
-    .replace(/\\([()[\]\\/`*_#+-])/g, '$1')
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\|\s*[-:]+[-|\s:]*\|/g, '')
-    .replace(/\|/g, ' ')
-    .replace(/^\s*[-*+]\s+/gm, '• ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+const cleanToPlainText = markdownToPurePlainText;
 
 interface AskDocsProps {
   onNavigateToTab?: (tabId: string) => void;
@@ -124,7 +101,7 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
     setTopSimilarity(null);
 
     try {
-      const allChunks = store.getChunks().filter((c) => !isRawPdfBinary(c.content));
+      const allChunks = store.getChunks().filter((c) => !isCorruptOrBinaryText(c.content));
       if (allChunks.length === 0) {
         toast.error('Your document library is empty. Please upload files in the Document Library tab.');
         setIsLoading(false);
@@ -199,26 +176,47 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
         console.warn('Server chat route unavailable, using local synthesis:', err);
       }
 
-      // Plain text local fallback if server was unreachable
+      // Dynamic synthesis fallback if server was unreachable or returned empty response
       if (!generatedAnswer && topContextChunks.length > 0) {
         const top = topContextChunks[0];
         const cleanContent = cleanToPlainText(top.content);
-        const friendlyName = top.file.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        const friendlyName = top.file.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
+        const cleanHeading = top.heading ? top.heading.replace(/^#+\s*/, '').trim() : '';
 
         const sentences = cleanContent
           .split(/(?<=[.!?])\s+/)
+          .map((s) => s.trim())
           .filter((s) => s.length > 20 && !s.startsWith('#'));
 
         const summary = sentences.slice(0, 4).join(' ');
 
-        generatedAnswer = `According to "${friendlyName}" (Section: "${top.heading}"):\n\n${
-          summary || cleanContent.slice(0, 300)
+        generatedAnswer = `According to ${friendlyName}${cleanHeading ? ' in section ' + cleanHeading : ''}:\n\n${
+          summary || cleanContent.slice(0, 320)
         }\n\nYou can review the exact source excerpts in the citations section below.`;
       }
 
       let finalClean = cleanToPlainText(generatedAnswer);
-      if (isRawPdfBinary(finalClean) || finalClean.includes('%PDF-')) {
-        finalClean = `According to "The Art of Explaining Complex Things Simply":\n\nSome of the most useful explanations are also the simplest. A person who understands a subject deeply should be able to guide someone else through it without making it feel more difficult than necessary. That takes more than knowing the facts; it requires clear thinking and understanding what the reader needs.\n\nKey principles from the document:\n• Simplicity begins with understanding: Use technical terms only when precision requires them, and always explain what they mean.\n• Start with the reader: Focus on what the reader is trying to achieve rather than internal technical mechanics.\n• Break difficult ideas into manageable steps: Introduce one idea at a time.\n• Use concrete examples: Practical scenarios give abstract ideas something familiar to anchor to.\n• Clarity is a form of respect: Explaining complex things simply makes knowledge accessible to everyone.`;
+
+      // Guard against any corrupt text or binary PDF markers: dynamically fall back to the actual matched chunk
+      if (isCorruptOrBinaryText(finalClean) || finalClean.includes('%PDF-') || !finalClean.trim()) {
+        if (topContextChunks.length > 0) {
+          const top = topContextChunks[0];
+          const cleanExcerpt = cleanToPlainText(top.content)
+            .split(/(?<=[.!?])\s+/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 20 && !s.startsWith('#'))
+            .slice(0, 4)
+            .join(' ');
+          const friendlyName = top.file.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ').trim();
+          const cleanHeading = top.heading ? top.heading.replace(/^#+\s*/, '').trim() : '';
+          finalClean = cleanToPlainText(
+            `According to ${friendlyName}${cleanHeading ? ' in section ' + cleanHeading : ''}:\n\n${
+              cleanExcerpt || cleanToPlainText(top.content).slice(0, 320)
+            }\n\nYou can review the source excerpts in the citations section below.`
+          );
+        } else {
+          finalClean = 'No matching information was found in your document library for this question. You can upload relevant documents in the Document Library tab.';
+        }
       }
 
       setAnswer(finalClean);
@@ -427,16 +425,8 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
                       className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none bg-slate-50/40 hover:bg-slate-50 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
-                            isPdf
-                              ? 'bg-red-50 text-red-700 border border-red-200'
-                              : isDoc
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}
-                        >
-                          {isPdf ? 'PDF' : isDoc ? 'Word' : 'Doc'}
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase font-mono bg-teal-50 text-teal-800 border border-teal-200">
+                          Markdown (.md)
                         </span>
 
                         <div className="truncate">

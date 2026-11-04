@@ -5,7 +5,8 @@
 
 import { GoogleGenAI } from '@google/genai';
 import mammoth from 'mammoth';
-import { extractPdfText, isRawPdfBinary } from './pdf-extractor';
+import { extractPdfText } from './pdf-extractor';
+import { isCorruptOrBinaryText } from '../src/lib/cleanText';
 
 function getAiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -27,12 +28,29 @@ function getAiClient(): GoogleGenAI | null {
 }
 
 /**
+ * Dynamically converts any original file name into a clean Markdown filename (.md).
+ * Works for any arbitrary document name without hardcoding.
+ */
+function toMarkdownFilename(originalName: string): string {
+  const baseName = originalName
+    .replace(/\.[^/.]+$/, '') // remove extension
+    .trim();
+  return `${baseName || 'document'}.md`;
+}
+
+/**
  * Normalizes plain text extracted from documents into clean structured markdown with sections.
  */
-function structurePlainTextIntoSections(title: string, rawText: string): string {
+function structurePlainTextIntoSections(docTitle: string, rawText: string): string {
+  const cleanTitle = docTitle
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[-_]/g, ' ')
+    .trim();
+
   const lines = rawText
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
+    .replace(/\ufffd/g, '') // strip any unicode replacement diamonds
     .split('\n')
     .map((l) => l.trim());
 
@@ -48,7 +66,7 @@ function structurePlainTextIntoSections(title: string, rawText: string): string 
       continue;
     }
 
-    // Skip page numbers or standalone metadata noise
+    // Skip page numbers or standalone page headers
     if (/^(page\s+\d+(\s+of\s+\d+)?|\d+)$/i.test(line)) {
       continue;
     }
@@ -59,7 +77,7 @@ function structurePlainTextIntoSections(title: string, rawText: string): string 
       /^[A-Z0-9\s,:'"-]+$/.test(line) ||
       /^[A-Z][a-z0-9]+(\s+[A-Z0-9][a-z0-9]*)*:?$/.test(line);
     const noTrailingPunctuation = !/[.,;]$/.test(line);
-    const isNumbered = /^(chapter|part|section|\d+(\.\d+)*)\s+/i.test(line);
+    const isNumbered = /^(chapter|part|section|principle|\d+(\.\d+)*)\s+/i.test(line);
 
     if (isShort && (isTitleCaseOrCaps || isNumbered) && noTrailingPunctuation) {
       if (!foundFirstHeading) {
@@ -78,8 +96,7 @@ function structurePlainTextIntoSections(title: string, rawText: string): string 
 
   // If no main heading was created, prepend the document title
   if (!result.startsWith('#')) {
-    const cleanDocTitle = title.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-    result = `# ${cleanDocTitle}\n\n${result}`;
+    result = `# ${cleanTitle}\n\n${result}`;
   }
 
   return result;
@@ -94,30 +111,39 @@ export async function handleParseDocumentRequest(body: {
   const { filename, fileBase64, mimeType, rawText } = body;
   const lowerName = filename.toLowerCase();
 
-  // 1. Direct raw text (.md, .txt)
-  if (rawText && !fileBase64) {
-    if (isRawPdfBinary(rawText)) {
-      throw new Error('Invalid file format: Detected raw binary data instead of text.');
-    }
-    return {
-      filename,
-      markdown: rawText,
-      sourceType: 'text',
-      wordCount: rawText.trim().split(/\s+/).filter(Boolean).length,
-    };
-  }
-
   const cleanBase64 = (fileBase64 || '').replace(/^data:.*?;base64,/, '').trim();
   const buffer = cleanBase64 ? Buffer.from(cleanBase64, 'base64') : Buffer.from('');
   const ai = getAiClient();
+  const targetMdFilename = toMarkdownFilename(filename);
 
-  // 2. PDF Documents (.pdf)
-  if (mimeType === 'application/pdf' || lowerName.endsWith('.pdf')) {
+  // 1. Direct Markdown file (.md, .markdown)
+  if ((lowerName.endsWith('.md') || lowerName.endsWith('.markdown')) && (rawText || cleanBase64)) {
+    const text = rawText || buffer.toString('utf-8');
+    if (isCorruptOrBinaryText(text)) {
+      throw new Error('This file appears to contain corrupt binary symbols instead of valid Markdown text.');
+    }
+    return {
+      filename,
+      markdown: text,
+      sourceType: 'markdown',
+      isConverted: false,
+      wordCount: text.trim().split(/\s+/).filter(Boolean).length,
+    };
+  }
+
+  // Check if buffer starts with PDF magic bytes (%PDF) even if filename extension differs
+  const isPdfFile =
+    mimeType === 'application/pdf' ||
+    lowerName.endsWith('.pdf') ||
+    buffer.slice(0, 5).toString('latin1').startsWith('%PDF');
+
+  // 2. Convert PDF to Markdown
+  if (isPdfFile) {
     if (!cleanBase64) {
-      throw new Error('PDF file upload was empty');
+      throw new Error('PDF file upload was empty.');
     }
 
-    // Try Gemini Multimodal PDF Extraction first if available
+    // Try Gemini Multimodal PDF Conversion if API key is active
     if (ai) {
       try {
         const response = await ai.models.generateContent({
@@ -131,148 +157,118 @@ export async function handleParseDocumentRequest(body: {
                 },
               },
               {
-                text: 'Extract the full text content of this PDF document into clean, human-readable plain text with markdown headings (# for main title, ## for sections). Remove all header/footer artifacts, page numbers, and binary codes. Output only the clean document text.',
+                text: 'Convert the full text content of this PDF into a clean, well-structured Markdown (.md) document with # for document title, ## for section headings, and clean paragraphs. Strip all headers, footers, page numbers, and binary PDF artifacts. Return only the markdown document text without commentary.',
               },
             ],
           },
         });
 
         const geminiText = response.text || '';
-        if (geminiText.trim().length > 30 && !isRawPdfBinary(geminiText)) {
+        if (geminiText.trim().length > 30 && !isCorruptOrBinaryText(geminiText)) {
           return {
-            filename,
+            filename: targetMdFilename,
+            originalFilename: filename,
             markdown: geminiText.trim(),
-            sourceType: 'pdf',
+            sourceType: 'markdown',
+            convertedFrom: 'pdf',
+            isConverted: true,
             method: 'gemini-3.8-flash',
             wordCount: geminiText.trim().split(/\s+/).filter(Boolean).length,
           };
         }
       } catch (geminiErr) {
-        console.warn('Gemini multimodal PDF parse failed, using stream extractor:', geminiErr);
+        console.warn('Gemini multimodal PDF conversion attempt failed, using stream decoder:', geminiErr);
       }
     }
 
-    // Resilient server-side PDF stream extractor (handles ReportLab, ASCII85, Flate, pdfjs)
+    // Server-side PDF stream extractor (handles ReportLab ASCII85, Flate, text operators)
     try {
-      const pdfResult = await extractPdfText(buffer);
-      const structured = structurePlainTextIntoSections(filename, pdfResult.text);
+      const pdfResult = await extractPdfText(buffer, filename);
+      const structuredMarkdown = structurePlainTextIntoSections(filename, pdfResult.text);
 
-      if (isRawPdfBinary(structured)) {
+      if (isCorruptOrBinaryText(structuredMarkdown)) {
         throw new Error('Extracted PDF content contained binary stream markers.');
       }
 
       return {
-        filename,
-        markdown: structured,
-        sourceType: 'pdf',
+        filename: targetMdFilename,
+        originalFilename: filename,
+        markdown: structuredMarkdown,
+        sourceType: 'markdown',
+        convertedFrom: 'pdf',
+        isConverted: true,
         method: pdfResult.method,
         pageCount: pdfResult.pageCount,
-        wordCount: structured.trim().split(/\s+/).filter(Boolean).length,
+        wordCount: structuredMarkdown.trim().split(/\s+/).filter(Boolean).length,
       };
     } catch (parseErr: any) {
       console.error('PDF parsing error:', parseErr);
       throw new Error(
         parseErr?.message ||
-          'Could not extract readable text from this PDF. Please verify the document contains selectable text.'
+          'Could not extract readable text from this PDF. Please verify that the PDF contains selectable text.'
       );
     }
   }
 
-  // 3. Word Documents (.docx, .doc)
-  if (
+  // 3. Convert Word Document (.docx, .doc) to Markdown
+  const isWordFile =
     mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mimeType === 'application/msword' ||
     lowerName.endsWith('.docx') ||
-    lowerName.endsWith('.doc')
-  ) {
+    lowerName.endsWith('.doc');
+
+  if (isWordFile) {
     if (!cleanBase64) {
-      throw new Error('Word document upload was empty');
+      throw new Error('Word document upload was empty.');
     }
 
     try {
-      // Use Mammoth for clean, authentic Word text extraction
       const mammothResult = await mammoth.extractRawText({ buffer });
       const rawWordText = mammothResult.value;
 
       if (!rawWordText || rawWordText.trim().length === 0) {
-        throw new Error('Word document is empty or could not be converted');
+        throw new Error('Word document is empty or could not be read.');
       }
 
-      const structured = structurePlainTextIntoSections(filename, rawWordText);
+      const structuredMarkdown = structurePlainTextIntoSections(filename, rawWordText);
       return {
-        filename,
-        markdown: structured,
-        sourceType: 'docx',
-        wordCount: structured.trim().split(/\s+/).filter(Boolean).length,
+        filename: targetMdFilename,
+        originalFilename: filename,
+        markdown: structuredMarkdown,
+        sourceType: 'markdown',
+        convertedFrom: 'word',
+        isConverted: true,
+        wordCount: structuredMarkdown.trim().split(/\s+/).filter(Boolean).length,
       };
     } catch (docxErr: any) {
-      console.warn('Mammoth Word extraction error, attempting fallback:', docxErr);
-
-      if (ai) {
-        try {
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
-            contents: {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType:
-                      mimeType ||
-                      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    data: cleanBase64,
-                  },
-                },
-                {
-                  text: 'Extract the full text of this document into clean, readable text with markdown headings (#, ##).',
-                },
-              ],
-            },
-          });
-          const text = response.text || '';
-          if (text.trim().length > 20 && !isRawPdfBinary(text)) {
-            return {
-              filename,
-              markdown: text.trim(),
-              sourceType: 'docx',
-              method: 'gemini-3.8-flash',
-              wordCount: text.trim().split(/\s+/).filter(Boolean).length,
-            };
-          }
-        } catch (geminiDocxErr) {
-          console.error('Gemini Word parse error:', geminiDocxErr);
-        }
-      }
-
+      console.error('Word extraction error:', docxErr);
       throw new Error('Failed to extract text from Word document.');
     }
   }
 
-  // 4. Text or Markdown files decoded from base64
-  if (cleanBase64) {
-    try {
-      const decoded = buffer.toString('utf-8');
-      // Validate that this is NOT a PDF or binary file disguised as text
-      if (isRawPdfBinary(decoded)) {
-        throw new Error(
-          'This file appears to be a binary PDF or compiled document. Please ensure it is saved as valid text.'
-        );
-      }
-
-      // Check for high percentage of binary characters
-      const nonPrintableCount = (decoded.match(/[\x00-\x08\x0E-\x1F\x7F-\x9F]/g) || []).length;
-      if (nonPrintableCount > decoded.length * 0.05) {
-        throw new Error('This file contains binary or unreadable characters.');
-      }
-
-      const cleanText = decoded.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ');
-      return {
-        filename,
-        markdown: cleanText,
-        sourceType: 'text',
-        wordCount: cleanText.trim().split(/\s+/).filter(Boolean).length,
-      };
-    } catch (err: any) {
-      throw new Error(err?.message || 'Failed to decode file contents as text.');
+  // 4. Convert Plain Text (.txt) or Base64 Text into Markdown
+  if (cleanBase64 || rawText) {
+    let textContent = rawText || '';
+    if (!textContent && cleanBase64) {
+      textContent = buffer.toString('utf-8');
     }
+
+    if (isCorruptOrBinaryText(textContent)) {
+      throw new Error(
+        'This file appears to contain binary symbols or corrupted characters. Please ensure it is a valid text file.'
+      );
+    }
+
+    const structuredMarkdown = structurePlainTextIntoSections(filename, textContent);
+    return {
+      filename: targetMdFilename,
+      originalFilename: filename,
+      markdown: structuredMarkdown,
+      sourceType: 'markdown',
+      convertedFrom: 'text',
+      isConverted: true,
+      wordCount: structuredMarkdown.trim().split(/\s+/).filter(Boolean).length,
+    };
   }
 
   throw new Error('Unsupported or empty file format.');
@@ -287,6 +283,6 @@ export default async function handler(req: any, res: any) {
     const result = await handleParseDocumentRequest(req.body);
     return res.status(200).json(result);
   } catch (err: any) {
-    return res.status(500).json({ error: err?.message || 'Failed to parse document' });
+    return res.status(500).json({ error: err?.message || 'Failed to convert document to Markdown' });
   }
 }

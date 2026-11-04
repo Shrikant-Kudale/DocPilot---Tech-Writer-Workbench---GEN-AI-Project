@@ -4,6 +4,7 @@
  */
 
 import { GoogleGenAI } from '@google/genai';
+import { markdownToPurePlainText } from '../src/lib/cleanText';
 
 function getAiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -24,33 +25,7 @@ function getAiClient(): GoogleGenAI | null {
   }
 }
 
-/**
- * Strips raw markdown syntax, escape slashes, bracketed links, and formatting symbols
- * to produce clean, natural human-readable plain text for non-technical readers.
- */
-export function cleanToPlainText(raw: string): string {
-  if (!raw) return '';
-  return raw
-    .replace(/^#{1,6}\s+(.*)$/gm, '$1') // Convert # Header to Header
-    .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold
-    .replace(/\*([^*]+)\*/g, '$1') // Remove italics
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/_([^_]+)_/g, '$1')
-    .replace(/`([^`]+)`/g, '$1') // Remove inline code backticks
-    .replace(/```[a-z]*\n([\s\S]*?)```/gi, '$1') // Unwrap code blocks
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [link text](url) -> link text
-    .replace(/\[\s*\d+\s*\]/g, '') // Remove citation brackets [1], [2]
-    .replace(/\\([()[\]\\/`*_#+-])/g, '$1') // Remove backslash escapes
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\|\s*[-:]+[-|\s:]*\|/g, '') // Remove markdown table divider rows
-    .replace(/\|/g, ' ') // Remove table pipes
-    .replace(/^\s*[-*+]\s+/gm, '• ') // Standardize bullets to friendly dots
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+export const cleanToPlainText = markdownToPurePlainText;
 
 export type ChatAction =
   | 'rag_answer'
@@ -102,11 +77,11 @@ export async function handleChatRequest(body: {
         const prompt = `You are DocPilot, a helpful documentation assistant for technical writers and non-technical readers alike.
 Answer the question accurately based on the provided documentation excerpts below.
 
-CRITICAL FORMATTING INSTRUCTIONS FOR HUMAN READABILITY:
-1. OUTPUT IN CLEAN PLAIN TEXT: Do not output raw markdown symbols, raw brackets like [1], escape slashes (\\ or \/), backticks, asterisks for bold, or raw HTML tags. Write so that a normal human reader can read comfortably without seeing technical markup code.
-2. DO NOT COPY-PASTE RAW CHUNKS: Synthesize the facts into your own well-structured sentences. Explain what the document means in clear, conversational English.
-3. CITATIONS AS PLAIN ENGLISH: Mention source documents naturally by name in your sentences (for example: "According to ${chunks[0]?.file ? chunks[0].file.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'the documentation'}..."). Do not use bracketed numbers like [1].
-4. STRUCTURE: Use clean paragraph breaks and clear bullet points (• Item) for lists.
+CRITICAL INSTRUCTIONS FOR NATURAL SPOKEN HUMAN READABILITY:
+1. OUTPUT IN CLEAN NATURAL PLAIN PROSE: Do not output any markdown symbols (such as hashes, asterisks, backticks, underscores, tildes, or blockquotes), no brackets [1], no bullet dashes (- or --), no bullet symbols (•), no hyphens as list markers, and no escape slashes (\\ or /).
+2. ZERO DASHES OR BULLETS: Do not use dashes or hyphens between clauses where a comma or period belongs. Do not format lists with dashes or bullet points. Write in complete, flowing natural sentences and well-spaced paragraphs, so that text-to-speech readers and humans never read the words "dash" or "bullet".
+3. NO CITATION NUMBERS OR BRACKETED SOURCES: Mention source documents naturally by name in your prose (for example: "According to ${chunks[0]?.file ? chunks[0].file.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') : 'the documentation'}..."). Never write "[1]" or "(source 1)".
+4. DO NOT COPY-PASTE RAW CHUNKS: Explain the key ideas in clear, direct English.
 5. If the documentation does not fully answer the question, state politely what is available and what information is missing.
 
 DOCUMENTATION EXCERPTS:
@@ -115,7 +90,7 @@ ${contextText}
 QUESTION:
 ${question}
 
-ANSWER IN PLAIN TEXT:`;
+ANSWER IN PURE PLAIN ENGLISH:`;
 
         const response = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
@@ -123,7 +98,7 @@ ANSWER IN PLAIN TEXT:`;
         });
 
         const rawGenerated = response.text || 'No response generated.';
-        // Clean any accidental markdown artifacts
+        // Clean all markdown, dashes, bracket and symbol artifacts
         const cleanAnswer = cleanToPlainText(rawGenerated);
 
         return {

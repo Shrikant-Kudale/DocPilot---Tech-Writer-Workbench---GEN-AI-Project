@@ -27,31 +27,10 @@ import { Table, Column } from '../components/Table';
 import { useToast } from '../components/Toast';
 import { useDocStore } from '../lib/store';
 import { chunkMarkdown, DocChunk, countWords } from '../lib/chunk';
+import { isCorruptOrBinaryText, markdownToPurePlainText } from '../lib/cleanText';
 
-// Utility to clean markdown formatting into pure plain text
-function cleanToPlainText(raw: string): string {
-  if (!raw) return '';
-  return raw
-    .replace(/^#{1,6}\s+(.*)$/gm, '$1')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/\*([^*]+)\*/g, '$1')
-    .replace(/__([^_]+)__/g, '$1')
-    .replace(/_([^_]+)_/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/```[a-z]*\n([\s\S]*?)```/gi, '$1')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/\[\s*\d+\s*\]/g, '')
-    .replace(/\\([()[\]\\/`*_#+-])/g, '$1')
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\|\s*[-:]+[-|\s:]*\|/g, '')
-    .replace(/\|/g, ' ')
-    .replace(/^\s*[-*+]\s+/gm, '• ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+// Alias for plain text display
+const cleanToPlainText = markdownToPurePlainText;
 
 export const KnowledgeBase: React.FC = () => {
   const store = useDocStore();
@@ -84,24 +63,28 @@ export const KnowledgeBase: React.FC = () => {
   // Process uploaded file (PDF, DOCX, DOC, MD, TXT)
   const handleProcessFile = async (file: File) => {
     const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-    const allowed = ['.md', '.markdown', '.txt', '.pdf', '.docx', '.doc'];
-
-    if (!allowed.includes(ext) && !file.type.includes('text') && !file.type.includes('pdf')) {
-      toast.warning('Please upload a supported file: PDF (.pdf), Word (.docx), Markdown (.md), or Text (.txt).');
-      return;
-    }
+    const isAlreadyMarkdown = ext === '.md' || ext === '.markdown';
 
     try {
       setIsProcessing(true);
-      setProcessingStatus(`Reading and extracting text from ${file.name}...`);
-      toast.info(`Parsing ${file.name}...`);
-
+      let targetFilename = file.name;
       let markdownContent = '';
 
-      if (ext === '.pdf' || ext === '.docx' || ext === '.doc') {
-        const base64 = await fileToBase64(file);
-        setProcessingStatus(`Decoding ${ext.toUpperCase()} document pages into plain text...`);
+      if (isAlreadyMarkdown) {
+        // 1. Direct Markdown file
+        setProcessingStatus(`Reading Markdown file ${file.name}...`);
+        const text = await file.text();
+        if (isCorruptOrBinaryText(text)) {
+          throw new Error('This file appears to contain binary data or corrupt symbols instead of valid Markdown text.');
+        }
+        targetFilename = file.name;
+        markdownContent = text;
+      } else {
+        // 2. Non-Markdown file (PDF, Word, Plain Text, etc.): Convert automatically into clean Markdown (.md)
+        setProcessingStatus(`Converting ${file.name} into clean Markdown (.md)...`);
+        toast.info(`Converting ${file.name} to Markdown...`);
 
+        const base64 = await fileToBase64(file);
         const parseRes = await fetch('/api/parse-document', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -114,26 +97,28 @@ export const KnowledgeBase: React.FC = () => {
 
         if (!parseRes.ok) {
           const errData = await parseRes.json().catch(() => ({}));
-          throw new Error(errData.error || `Failed to extract readable text from ${file.name}`);
+          throw new Error(errData.error || `Failed to convert ${file.name} into Markdown`);
         }
 
         const parseData = await parseRes.json();
+        targetFilename = parseData.filename || (file.name.replace(/\.[^/.]+$/, '') + '.md');
         markdownContent = parseData.markdown || '';
-      } else {
-        // Plain text / Markdown
-        markdownContent = await file.text();
+
+        if (isCorruptOrBinaryText(markdownContent)) {
+          throw new Error('Conversion produced invalid binary stream markers. Please verify the document contains readable text.');
+        }
       }
 
       if (!markdownContent.trim()) {
-        toast.warning('No text content could be extracted from this file.');
+        toast.warning('No readable text content could be extracted from this document.');
         setIsProcessing(false);
         setProcessingStatus('');
         return;
       }
 
-      // Step 2: Break into logical readable sections (~500 tokens / 380 words)
-      setProcessingStatus('Organizing into readable document sections...');
-      const generatedChunks = chunkMarkdown(file.name, markdownContent, 500, 50);
+      // Step 2: Break Markdown into logical readable sections (~500 tokens / 380 words)
+      setProcessingStatus(`Organizing ${targetFilename} into readable sections...`);
+      const generatedChunks = chunkMarkdown(targetFilename, markdownContent, 500, 50);
 
       if (generatedChunks.length === 0) {
         toast.warning('Unable to create sections from file.');
@@ -143,7 +128,7 @@ export const KnowledgeBase: React.FC = () => {
       }
 
       // Step 3: Embed chunks for semantic search
-      setProcessingStatus(`Indexing ${generatedChunks.length} sections for fast search...`);
+      setProcessingStatus(`Indexing ${generatedChunks.length} sections for search...`);
       try {
         const embedRes = await fetch('/api/embed', {
           method: 'POST',
@@ -163,12 +148,12 @@ export const KnowledgeBase: React.FC = () => {
         console.warn('Embedding step using fallback indexing:', embedErr);
       }
 
-      // Add to store
+      // Add to store (evicting any previous entries for this file)
       store.addChunks(generatedChunks);
       toast.success(
-        `Added ${generatedChunks.length} searchable section${
-          generatedChunks.length > 1 ? 's' : ''
-        } from ${file.name} to your Document Library!`
+        isAlreadyMarkdown
+          ? `Added ${generatedChunks.length} section${generatedChunks.length > 1 ? 's' : ''} from ${targetFilename}!`
+          : `Converted "${file.name}" to Markdown ("${targetFilename}") and added ${generatedChunks.length} section${generatedChunks.length > 1 ? 's' : ''}!`
       );
     } catch (err: any) {
       console.error('File processing error:', err);
@@ -206,6 +191,21 @@ export const KnowledgeBase: React.FC = () => {
     }
   };
 
+  const handleVerifyAndClean = () => {
+    const current = store.getChunks();
+    const cleanList = current.filter(
+      (c) => !isCorruptOrBinaryText(c.content) && !isCorruptOrBinaryText(c.heading)
+    );
+    const purgedCount = current.length - cleanList.length;
+    store.setChunks(cleanList);
+
+    if (purgedCount > 0) {
+      toast.success(`Removed ${purgedCount} invalid or corrupt section${purgedCount > 1 ? 's' : ''}. Library is clean!`);
+    } else {
+      toast.success(`All ${cleanList.length} sections are clean Markdown and 100% human-readable!`);
+    }
+  };
+
   const filteredChunks = chunks.filter(
     (c) =>
       c.file.toLowerCase().includes(searchFilter.toLowerCase()) ||
@@ -217,29 +217,17 @@ export const KnowledgeBase: React.FC = () => {
     {
       header: 'Document File',
       accessorKey: 'file',
-      width: '22%',
-      cell: (row) => {
-        const isPdf = row.file.toLowerCase().endsWith('.pdf');
-        const isDocx = row.file.toLowerCase().endsWith('.docx') || row.file.toLowerCase().endsWith('.doc');
-        return (
-          <div className="flex items-center gap-2 truncate">
-            <span
-              className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase font-mono ${
-                isPdf
-                  ? 'bg-red-50 text-red-700 border border-red-200'
-                  : isDocx
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-              }`}
-            >
-              {isPdf ? 'PDF' : isDocx ? 'Word' : 'Text'}
-            </span>
-            <span className="text-xs font-medium text-slate-800 truncate" title={row.file}>
-              {row.file}
-            </span>
-          </div>
-        );
-      },
+      width: '24%',
+      cell: (row) => (
+        <div className="flex items-center gap-2 truncate">
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase font-mono bg-teal-50 text-teal-800 border border-teal-200">
+            Markdown (.md)
+          </span>
+          <span className="text-xs font-medium text-slate-800 truncate" title={row.file}>
+            {row.file}
+          </span>
+        </div>
+      ),
     },
     {
       header: 'Section Title',
@@ -267,7 +255,7 @@ export const KnowledgeBase: React.FC = () => {
     {
       header: 'Text Preview (Plain Text)',
       accessorKey: 'content',
-      width: '30%',
+      width: '28%',
       cell: (row) => {
         const plain = cleanToPlainText(row.content);
         return (
@@ -285,7 +273,7 @@ export const KnowledgeBase: React.FC = () => {
           <button
             onClick={() => setPreviewChunk(row)}
             className="p-1.5 text-slate-400 hover:text-[#00A3A1] hover:bg-teal-50 rounded transition-colors cursor-pointer"
-            title="Read section text"
+            title="Read section text in plain text"
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -313,11 +301,19 @@ export const KnowledgeBase: React.FC = () => {
             Document Library
           </h1>
           <p className="text-sm text-slate-600 mt-1">
-            Upload your PDF, Word, and text documents. DocPilot turns them into clean plain text and makes them searchable in &ldquo;Ask your Documents&rdquo;.
+            Upload PDF, Word, or text files. DocPilot automatically converts them into clean Markdown documents and indexes them for simple plain-text search.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleVerifyAndClean}
+            icon={<CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />}
+          >
+            Verify & Clean
+          </Button>
           <Button
             size="sm"
             variant="outline"

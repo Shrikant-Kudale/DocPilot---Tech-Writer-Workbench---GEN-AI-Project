@@ -59,11 +59,16 @@ export interface EvalRun {
   results: EvalResultItem[];
 }
 
-// Storage keys - version bumped to v3 to automatically evict any legacy corrupted chunks
+// Storage keys - version bumped to v10 to immediately purge any legacy corrupted chunks
 const STORAGE_KEYS = {
-  CHUNKS: 'docpilot_chunks_v3',
-  CHUNKS_LEGACY_V2: 'docpilot_chunks_v2',
-  CHUNKS_LEGACY_V1: 'docpilot_chunks_v1',
+  CHUNKS: 'docpilot_chunks_v10',
+  LEGACY_KEYS: [
+    'docpilot_chunks_v1',
+    'docpilot_chunks_v2',
+    'docpilot_chunks_v3',
+    'docpilot_chunks_v4',
+    'docpilot_chunks_v5',
+  ],
   GAPS: 'docpilot_gaps_v2',
   PROMPTS: 'docpilot_prompts_v2',
   GOLDEN: 'docpilot_golden_v2',
@@ -134,7 +139,9 @@ function emitChange() {
 function isValidCleanChunk(c: any): boolean {
   if (!c || typeof c !== 'object') return false;
   if (!c.content || typeof c.content !== 'string') return false;
-  return !isRawPdfBinary(c.content);
+  if (isRawPdfBinary(c.content)) return false;
+  if (c.heading && isRawPdfBinary(c.heading)) return false;
+  return true;
 }
 
 // Storage abstraction layer
@@ -143,13 +150,34 @@ export const docStore = {
   getChunks(): DocChunk[] {
     try {
       if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-        // 1. Try reading active v3 chunks
+        // Purge all old legacy storage keys that could have stored corrupt PDF stream data
+        for (const legacyKey of STORAGE_KEYS.LEGACY_KEYS) {
+          localStorage.removeItem(legacyKey);
+        }
+
+        // 1. Try reading active v10 chunks
         const stored = localStorage.getItem(STORAGE_KEYS.CHUNKS);
         if (stored) {
           const parsed: DocChunk[] = JSON.parse(stored);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            // Filter out any corrupt binary chunks that might have snuck in
-            const sanitized = parsed.filter(isValidCleanChunk);
+            // Filter out any corrupt binary chunks and ensure filenames end in .md
+            const sanitized = parsed
+              .filter(isValidCleanChunk)
+              .map((chunk) => {
+                let cleanFileName = chunk.file;
+                if (
+                  cleanFileName.toLowerCase().endsWith('.pdf') ||
+                  cleanFileName.toLowerCase().endsWith('.docx') ||
+                  cleanFileName.toLowerCase().endsWith('.txt')
+                ) {
+                  cleanFileName = cleanFileName.replace(/\.[^/.]+$/, '') + '.md';
+                }
+                return {
+                  ...chunk,
+                  file: cleanFileName,
+                };
+              });
+
             if (sanitized.length !== parsed.length) {
               // Persist the sanitized list
               localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(sanitized));
@@ -159,33 +187,21 @@ export const docStore = {
             }
           }
         }
-
-        // 2. Migration from legacy v2 or v1 storage: purge any corrupt chunks and migrate
-        for (const legacyKey of [STORAGE_KEYS.CHUNKS_LEGACY_V2, STORAGE_KEYS.CHUNKS_LEGACY_V1]) {
-          const legacyStored = localStorage.getItem(legacyKey);
-          if (legacyStored) {
-            try {
-              const legacyParsed = JSON.parse(legacyStored);
-              if (Array.isArray(legacyParsed)) {
-                const cleanLegacy = legacyParsed.filter(isValidCleanChunk);
-                localStorage.removeItem(legacyKey);
-                if (cleanLegacy.length > 0) {
-                  localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(cleanLegacy));
-                  return cleanLegacy;
-                }
-              }
-            } catch {
-              localStorage.removeItem(legacyKey);
-            }
-          }
-        }
       }
     } catch (e) {
       console.warn('Failed reading chunks from storage, fallback loaded', e);
     }
 
-    // Default: Return pre-seeded clean documentation (includes clean S4_The_Art_Of_Explaining_Complex_Things_Simply.pdf)
-    const defaults = (fallbackEmbeddings as DocChunk[]).filter(isValidCleanChunk);
+    // Default: Return pre-seeded clean documentation (clean Markdown files)
+    const defaults = (fallbackEmbeddings as DocChunk[])
+      .filter(isValidCleanChunk)
+      .map((c) => ({
+        ...c,
+        file: c.file.toLowerCase().endsWith('.pdf')
+          ? c.file.replace(/\.[^/.]+$/, '') + '.md'
+          : c.file,
+      }));
+
     try {
       if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(defaults));
