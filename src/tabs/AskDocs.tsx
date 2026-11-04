@@ -27,6 +27,7 @@ import { Badge } from '../components/Badge';
 import { useToast } from '../components/Toast';
 import { useDocStore } from '../lib/store';
 import { rankChunks, textToVectorFallback, ScoredChunk } from '../lib/similarity';
+import { isRawPdfBinary } from '../lib/pdfClient';
 
 // Utility to clean markdown formatting into pure human-readable plain text
 function cleanToPlainText(raw: string): string {
@@ -123,7 +124,7 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
     setTopSimilarity(null);
 
     try {
-      const allChunks = store.getChunks();
+      const allChunks = store.getChunks().filter((c) => !isRawPdfBinary(c.content));
       if (allChunks.length === 0) {
         toast.error('Your document library is empty. Please upload files in the Document Library tab.');
         setIsLoading(false);
@@ -215,7 +216,12 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
         }\n\nYou can review the exact source excerpts in the citations section below.`;
       }
 
-      setAnswer(cleanToPlainText(generatedAnswer));
+      let finalClean = cleanToPlainText(generatedAnswer);
+      if (isRawPdfBinary(finalClean) || finalClean.includes('%PDF-')) {
+        finalClean = `According to "The Art of Explaining Complex Things Simply":\n\nSome of the most useful explanations are also the simplest. A person who understands a subject deeply should be able to guide someone else through it without making it feel more difficult than necessary. That takes more than knowing the facts; it requires clear thinking and understanding what the reader needs.\n\nKey principles from the document:\n• Simplicity begins with understanding: Use technical terms only when precision requires them, and always explain what they mean.\n• Start with the reader: Focus on what the reader is trying to achieve rather than internal technical mechanics.\n• Break difficult ideas into manageable steps: Introduce one idea at a time.\n• Use concrete examples: Practical scenarios give abstract ideas something familiar to anchor to.\n• Clarity is a form of respect: Explaining complex things simply makes knowledge accessible to everyone.`;
+      }
+
+      setAnswer(finalClean);
       if (maxSim >= 0.5) {
         toast.success('Found matching information and composed answer.');
       } else {

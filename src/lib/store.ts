@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import fallbackEmbeddings from '../../data/embeddings.json';
 import defaultGoldenQuestions from '../../data/golden.json';
 import { DocChunk } from './chunk';
+import { isRawPdfBinary } from './pdfClient';
 
 export interface GapReportItem {
   id: string;
@@ -58,39 +59,44 @@ export interface EvalRun {
   results: EvalResultItem[];
 }
 
-// Storage keys
+// Storage keys - version bumped to v3 to automatically evict any legacy corrupted chunks
 const STORAGE_KEYS = {
-  CHUNKS: 'docpilot_chunks_v1',
-  GAPS: 'docpilot_gaps_v1',
-  PROMPTS: 'docpilot_prompts_v1',
-  GOLDEN: 'docpilot_golden_v1',
-  EVALS: 'docpilot_evals_v1',
+  CHUNKS: 'docpilot_chunks_v3',
+  CHUNKS_LEGACY_V2: 'docpilot_chunks_v2',
+  CHUNKS_LEGACY_V1: 'docpilot_chunks_v1',
+  GAPS: 'docpilot_gaps_v2',
+  PROMPTS: 'docpilot_prompts_v2',
+  GOLDEN: 'docpilot_golden_v2',
+  EVALS: 'docpilot_evals_v2',
 };
 
 // Default initial prompt templates
 const DEFAULT_PROMPTS: PromptVersion[] = [
   {
-    id: 'prompt-concise-v1',
-    name: 'v1: Technical Writer Concise',
-    description: 'Direct, declarative documentation style following Google Dev Docs guidelines.',
-    systemPrompt: 'You are DocPilot, an expert technical writer. Answer strictly based on the provided documentation context. Keep answers clear, imperative, and concise. Never speculate. Cite source headings using [1], [2].',
-    template: 'Context:\n{{context}}\n\nQuestion:\n{{question}}\n\nAnswer:',
+    id: 'prompt-plain-v1',
+    name: 'Plain English & Friendly (Recommended)',
+    description: 'Direct, easy-to-understand conversational explanation without technical jargon or code symbols.',
+    systemPrompt:
+      'You are DocPilot, a helpful documentation assistant. Answer questions clearly in natural, plain text English suitable for non-technical readers. Do not use raw markdown tags, brackets, or code symbols. Cite sources naturally.',
+    template: 'Documentation Context:\n{{context}}\n\nQuestion:\n{{question}}\n\nClear Plain Text Answer:',
     createdAt: '2026-11-01T12:00:00Z',
   },
   {
     id: 'prompt-stepbystep-v2',
-    name: 'v2: Step-by-Step with Prerequisites',
-    description: 'Procedural format with prerequisites, imperative numbered steps, and expected outcome.',
-    systemPrompt: 'You are DocPilot technical author. Structure your response into: 1. Prerequisites 2. Step-by-step imperative instructions 3. Verification. If the context does not contain the answer, say "Information not found in documentation."',
-    template: 'Documentation:\n{{context}}\n\nTask/Question:\n{{question}}\n\nStep-by-step resolution:',
+    name: 'Step-by-Step with Action Verbs',
+    description: 'Clear numbered procedure with action verbs for each instruction.',
+    systemPrompt:
+      'You are DocPilot. Explain the resolution as numbered, step-by-step instructions. Begin each step with an active verb (e.g. Open, Select, Enter). Explain what to expect at each step.',
+    template: 'Documentation:\n{{context}}\n\nTask:\n{{question}}\n\nStep-by-step instructions:',
     createdAt: '2026-11-02T15:30:00Z',
   },
   {
-    id: 'prompt-apiref-v3',
-    name: 'v3: Minimal API Reference',
-    description: 'Dense, code-first answer format tailored for software engineers reading quick references.',
-    systemPrompt: 'You are an API reference generator. Give a 1-sentence summary, then copy-pasteable code examples, curl snippets, and parameter tables. Rely purely on documentation context.',
-    template: 'Context:\n{{context}}\n\nQuery:\n{{question}}\n\nAPI Reference Summary:',
+    id: 'prompt-summary-v3',
+    name: 'Executive Summary',
+    description: 'Brief, high-level summary highlighting key takeaways and recommendations.',
+    systemPrompt:
+      'You are an executive documentation advisor. Provide a concise 2-3 paragraph summary of the topic followed by key bullet takeaways.',
+    template: 'Context:\n{{context}}\n\nTopic:\n{{question}}\n\nExecutive Summary:',
     createdAt: '2026-11-03T09:00:00Z',
   },
 ];
@@ -99,15 +105,15 @@ const DEFAULT_PROMPTS: PromptVersion[] = [
 const DEFAULT_GAPS: GapReportItem[] = [
   {
     id: 'gap-seed-1',
-    question: 'How do I migrate from v1 legacy session tokens to v2 OAuth JWTs?',
-    count: 4,
+    question: 'How do I migrate from legacy session tokens to OAuth JWTs?',
+    count: 3,
     date: '2026-11-03T14:22:00Z',
     topSimilarity: 0.42,
     status: 'unresolved',
   },
   {
     id: 'gap-seed-2',
-    question: 'Does DocPilot support GraphQL subscription endpoints on edge workers?',
+    question: 'How do I set up custom webhook retry limits?',
     count: 2,
     date: '2026-11-02T18:10:00Z',
     topSimilarity: 0.38,
@@ -122,24 +128,81 @@ function emitChange() {
   listeners.forEach((l) => l());
 }
 
+/**
+ * Validates that a chunk is free from PDF binary stream code.
+ */
+function isValidCleanChunk(c: any): boolean {
+  if (!c || typeof c !== 'object') return false;
+  if (!c.content || typeof c.content !== 'string') return false;
+  return !isRawPdfBinary(c.content);
+}
+
 // Storage abstraction layer
 export const docStore = {
-  // --- Chunks / Knowledge Base ---
+  // --- Chunks / Document Library ---
   getChunks(): DocChunk[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.CHUNKS);
-      if (stored) {
-        return JSON.parse(stored);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        // 1. Try reading active v3 chunks
+        const stored = localStorage.getItem(STORAGE_KEYS.CHUNKS);
+        if (stored) {
+          const parsed: DocChunk[] = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // Filter out any corrupt binary chunks that might have snuck in
+            const sanitized = parsed.filter(isValidCleanChunk);
+            if (sanitized.length !== parsed.length) {
+              // Persist the sanitized list
+              localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(sanitized));
+            }
+            if (sanitized.length > 0) {
+              return sanitized;
+            }
+          }
+        }
+
+        // 2. Migration from legacy v2 or v1 storage: purge any corrupt chunks and migrate
+        for (const legacyKey of [STORAGE_KEYS.CHUNKS_LEGACY_V2, STORAGE_KEYS.CHUNKS_LEGACY_V1]) {
+          const legacyStored = localStorage.getItem(legacyKey);
+          if (legacyStored) {
+            try {
+              const legacyParsed = JSON.parse(legacyStored);
+              if (Array.isArray(legacyParsed)) {
+                const cleanLegacy = legacyParsed.filter(isValidCleanChunk);
+                localStorage.removeItem(legacyKey);
+                if (cleanLegacy.length > 0) {
+                  localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(cleanLegacy));
+                  return cleanLegacy;
+                }
+              }
+            } catch {
+              localStorage.removeItem(legacyKey);
+            }
+          }
+        }
       }
     } catch (e) {
       console.warn('Failed reading chunks from storage, fallback loaded', e);
     }
-    return fallbackEmbeddings as DocChunk[];
+
+    // Default: Return pre-seeded clean documentation (includes clean S4_The_Art_Of_Explaining_Complex_Things_Simply.pdf)
+    const defaults = (fallbackEmbeddings as DocChunk[]).filter(isValidCleanChunk);
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(defaults));
+      }
+    } catch {
+      // ignore
+    }
+    return defaults;
   },
 
   setChunks(chunks: DocChunk[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(chunks));
+      // Strict filter against any binary stream chunks
+      const sanitized = chunks.filter(isValidCleanChunk);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.CHUNKS, JSON.stringify(sanitized));
+      }
       emitChange();
     } catch (e) {
       console.error('Failed saving chunks', e);
@@ -148,8 +211,13 @@ export const docStore = {
 
   addChunks(newChunks: DocChunk[]): void {
     const current = this.getChunks();
-    const updated = [...newChunks, ...current.filter((c) => !newChunks.some((nc) => nc.id === c.id))];
-    this.setChunks(updated);
+    const cleanNew = newChunks.filter(isValidCleanChunk);
+    const newFiles = new Set(cleanNew.map((c) => c.file.toLowerCase()));
+    // Evict any existing chunks for these uploaded files
+    const retained = current.filter(
+      (c) => !newFiles.has(c.file.toLowerCase()) && !cleanNew.some((nc) => nc.id === c.id)
+    );
+    this.setChunks([...cleanNew, ...retained]);
   },
 
   deleteChunk(id: string): void {
@@ -158,15 +226,18 @@ export const docStore = {
   },
 
   resetChunksToDefault(): void {
-    this.setChunks(fallbackEmbeddings as DocChunk[]);
+    const defaults = (fallbackEmbeddings as DocChunk[]).filter(isValidCleanChunk);
+    this.setChunks(defaults);
   },
 
   // --- Gap Report ---
   getGaps(): GapReportItem[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.GAPS);
-      if (stored) {
-        return JSON.parse(stored);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(STORAGE_KEYS.GAPS);
+        if (stored) {
+          return JSON.parse(stored);
+        }
       }
     } catch (e) {
       console.warn('Failed reading gaps from storage', e);
@@ -176,7 +247,9 @@ export const docStore = {
 
   setGaps(gaps: GapReportItem[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.GAPS, JSON.stringify(gaps));
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.GAPS, JSON.stringify(gaps));
+      }
       emitChange();
     } catch (e) {
       console.error('Failed saving gaps', e);
@@ -221,12 +294,14 @@ export const docStore = {
     this.setGaps(current.filter((g) => g.id !== id));
   },
 
-  // --- Prompt Lab ---
+  // --- Prompt Studio ---
   getPrompts(): PromptVersion[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.PROMPTS);
-      if (stored) {
-        return JSON.parse(stored);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(STORAGE_KEYS.PROMPTS);
+        if (stored) {
+          return JSON.parse(stored);
+        }
       }
     } catch (e) {
       console.warn('Failed reading prompts', e);
@@ -247,7 +322,9 @@ export const docStore = {
 
   setPrompts(prompts: PromptVersion[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.PROMPTS, JSON.stringify(prompts));
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.PROMPTS, JSON.stringify(prompts));
+      }
       emitChange();
     } catch (e) {
       console.error('Failed saving prompts', e);
@@ -262,9 +339,11 @@ export const docStore = {
   // --- Golden Dataset & Evaluation ---
   getGoldenQuestions(): GoldenQuestion[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.GOLDEN);
-      if (stored) {
-        return JSON.parse(stored);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(STORAGE_KEYS.GOLDEN);
+        if (stored) {
+          return JSON.parse(stored);
+        }
       }
     } catch (e) {
       console.warn('Failed reading golden set', e);
@@ -274,7 +353,9 @@ export const docStore = {
 
   setGoldenQuestions(questions: GoldenQuestion[]): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.GOLDEN, JSON.stringify(questions));
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.GOLDEN, JSON.stringify(questions));
+      }
       emitChange();
     } catch (e) {
       console.error('Failed saving golden questions', e);
@@ -283,9 +364,11 @@ export const docStore = {
 
   getEvalRuns(): EvalRun[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.EVALS);
-      if (stored) {
-        return JSON.parse(stored);
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(STORAGE_KEYS.EVALS);
+        if (stored) {
+          return JSON.parse(stored);
+        }
       }
     } catch (e) {
       console.warn('Failed reading eval runs', e);
@@ -297,7 +380,9 @@ export const docStore = {
     const current = this.getEvalRuns();
     const updated = [run, ...current].slice(0, 20);
     try {
-      localStorage.setItem(STORAGE_KEYS.EVALS, JSON.stringify(updated));
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEYS.EVALS, JSON.stringify(updated));
+      }
       emitChange();
     } catch (e) {
       console.error('Failed saving eval run', e);
