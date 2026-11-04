@@ -138,7 +138,7 @@ export const Rewrite: React.FC = () => {
       {/* Friendly How this works explainer */}
       <div className="p-3.5 rounded-xl bg-teal-50/60 border border-teal-200 text-xs text-slate-700 space-y-1">
         <div className="font-semibold text-teal-900 flex items-center gap-1.5">
-          <span>💡 How to use & what happens:</span>
+          <span>How to use this tool:</span>
         </div>
         <p className="text-slate-600 leading-relaxed">
           <strong>1. Put original text on the left:</strong> Enter raw developer notes or draft copy.

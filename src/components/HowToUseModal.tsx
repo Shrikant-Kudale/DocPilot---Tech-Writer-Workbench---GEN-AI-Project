@@ -41,47 +41,47 @@ export const HowToUseModal: React.FC<HowToUseModalProps> = ({
   const sections = [
     {
       id: 'getting-started',
-      title: '🚀 Getting Started',
+      title: 'Getting Started',
       icon: <HelpCircle className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'kb',
-      title: '📚 Building Your Knowledge Base',
+      title: 'Building Your Knowledge Base',
       icon: <Database className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'ask',
-      title: '🔍 Asking the Docs',
+      title: 'Asking the Docs',
       icon: <Search className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'lint',
-      title: '✨ Style Linter',
+      title: 'Style Linter',
       icon: <Sparkles className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'rewrite',
-      title: '✍️ Rewrite Assistant',
+      title: 'Rewrite Assistant',
       icon: <FileEdit className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'prompt',
-      title: '🧪 Prompt Lab',
+      title: 'Prompt Lab',
       icon: <Sliders className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'eval',
-      title: '📊 Evaluation Benchmark',
+      title: 'Evaluation Benchmark',
       icon: <CheckCircle2 className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'gap',
-      title: '🚩 Gap Report',
+      title: 'Gap Report',
       icon: <AlertCircle className="w-4 h-4 text-[#00A3A1]" />,
     },
     {
       id: 'auto',
-      title: '⚙️ Automation Tools',
+      title: 'Automation Tools',
       icon: <Wrench className="w-4 h-4 text-[#00A3A1]" />,
     },
   ];
@@ -217,16 +217,16 @@ export const HowToUseModal: React.FC<HowToUseModalProps> = ({
                     </h4>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className="px-2.5 py-1 rounded bg-teal-50 text-[#00A3A1] font-mono font-semibold border border-teal-200">
-                        📄 PDF (.pdf)
+                        PDF (.pdf)
                       </span>
                       <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 font-mono font-semibold border border-blue-200">
-                        📝 Word (.docx, .doc)
+                        Word (.docx, .doc)
                       </span>
                       <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 font-mono font-semibold border border-emerald-200">
-                        📑 Markdown (.md, .markdown)
+                        Markdown (.md, .markdown)
                       </span>
                       <span className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-mono font-semibold border border-slate-200">
-                        📃 Plain Text (.txt)
+                        Plain Text (.txt)
                       </span>
                     </div>
                   </div>

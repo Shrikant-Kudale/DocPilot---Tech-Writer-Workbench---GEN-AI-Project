@@ -37,7 +37,6 @@ export async function handleEmbedRequest(reqBody: { texts?: string[]; text?: str
     try {
       const embeddings: number[][] = [];
       for (const text of texts) {
-        // Truncate to reasonable token length for embedding model
         const cleanText = text.slice(0, 8000);
         const response = await ai.models.embedContent({
           model: 'gemini-embedding-2-preview',
@@ -48,7 +47,6 @@ export async function handleEmbedRequest(reqBody: { texts?: string[]; text?: str
           response.embeddings?.[0]?.values ||
           (response as any).embedding?.values;
         if (values && values.length > 0) {
-          // Normalize embedding vector
           embeddings.push(values);
         } else {
           embeddings.push(textToVectorFallback(text));
@@ -65,11 +63,23 @@ export async function handleEmbedRequest(reqBody: { texts?: string[]; text?: str
     }
   }
 
-  // Resilient fallback to deterministic projection
   const fallbackEmbeddings = texts.map((t) => textToVectorFallback(t));
   return {
     embeddings: fallbackEmbeddings,
     count: fallbackEmbeddings.length,
     model: 'fallback-deterministic-cosine',
   };
+}
+
+// Vercel Serverless Function export
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  try {
+    const result = await handleEmbedRequest(req.body);
+    return res.status(200).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Embedding generation failed' });
+  }
 }

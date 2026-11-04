@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧭 DocPilot
+# DocPilot
 ### AI Documentation Workbench for Technical Writers
 
 [![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
@@ -16,7 +16,7 @@
 
 **DocPilot** is an enterprise-grade documentation workbench engineered specifically for technical writers, developer advocates, and API architects. It bridges semantic Retrieval-Augmented Generation (RAG), automated style governance (Google & Microsoft Developer Style Guides), side-by-side refactoring with strict human verification, and continuous documentation quality evaluation.
 
-[Key Features](#-key-modules--capabilities) • [Architecture](#-system-architecture) • [How to Use Guide](#-how-to-use-docpilot-step-by-step) • [GenAI & Vector Memory](#-the-technology-behind-docpilot) • [Quickstart](#-quickstart--installation)
+[Key Features](#key-modules--capabilities) • [Architecture](#system-architecture) • [How to Use Guide](#how-to-use-docpilot-step-by-step) • [GenAI & Vector Memory](#the-technology-behind-docpilot) • [Quickstart](#quickstart--installation)
 
 <br/>
 
@@ -26,7 +26,7 @@
 
 ---
 
-## 🌟 Why DocPilot?
+## Why DocPilot?
 
 Modern documentation teams face three critical challenges when working with artificial intelligence:
 1. **Hallucination Risk**: Large Language Models often invent non-existent API parameters, flags, or headers if context is weak.
@@ -34,13 +34,13 @@ Modern documentation teams face three critical challenges when working with arti
 3. **The Coverage Blindspot**: Teams have no automated way of knowing what questions developers are asking that **do not exist** in their documentation.
 
 DocPilot solves this with a **Human-Governed, AI-Accelerated Workbench**:
-- **0.55 Similarity Cutoff**: If semantic search relevance falls below 55%, the system refuses to guess, shows an amber *"Not found in docs"* card, and automatically logs the inquiry to the **Gap Report**.
+- **Hybrid Retrieval Engine**: Combines dense vector cosine similarity with BM25 keyword relevance and exact title matching so your documents are always found and retrieved.
 - **Numbered Citations**: Every answer directly cites source files and section headings like `[1]` and `[2]`.
 - **Mandatory Human Verification**: AI-generated documentation drafts cannot be exported to Markdown until an author explicitly marks the *"Human verified"* checkbox.
 
 ---
 
-## 🏛 System Architecture
+## System Architecture
 
 The DocPilot pipeline operates strictly server-side through secure `/api` proxy routes, guaranteeing that API keys and customer documentation are never exposed to client runtimes.
 
@@ -61,11 +61,10 @@ flowchart TD
 
     subgraph QUERY["3. RAG Retrieval & Guardrail"]
         Q["User Query"] --> QE["Query Embedding"]
-        QE --> CS["Cosine Similarity Ranking\ndotProduct(A, B) / (||A|| * ||B||)"]
+        QE --> CS["Hybrid Ranking Engine\n(Cosine Similarity + BM25 Keywords)"]
         E --> CS
-        CS --> GATE{"Top Similarity\n>= 0.55 ?"}
-        GATE -- "Yes (Relevance Verified)" --> RAG["Gemini 3.8 Flash RAG\nAnswers with Citations [1], [2]"]
-        GATE -- "No (< 55% Match)" --> GAP["Amber 'Not Found' Card\n+ Auto-Log to Gap Report"]
+        CS --> RETRIEVE["Retrieve Top Matching Sections\n(Always displayed for human inspection)"]
+        RETRIEVE --> RAG["Gemini 3.8 Flash RAG\nAnswers Grounded with Citations [1], [2]"]
     end
 
     subgraph WORKBENCH["4. Technical Writer Modules"]
@@ -79,23 +78,23 @@ flowchart TD
 
 ---
 
-## 🚀 Key Modules & Capabilities
+## Key Modules & Capabilities
 
 | Module | What It Does | Why It Matters |
 | :--- | :--- | :--- |
-| **🔍 Ask the Docs** | Semantic question-answering with bracketed source citations `[1]`, `[2]`. | Eliminates speculation; links directly to source files and section titles. |
-| **📚 Knowledge Base** | Ingests **PDF, Word (.docx), Markdown (.md), and Text (.txt)** into indexed 500-token chunks. | Centralizes all company guides, whitepapers, and specs into one searchable vector library. |
-| **✨ Style Linter** | Deterministic regex engine checking **Google & Microsoft documentation guidelines**. | Flags deprecated terms (`blacklist`, `click here`), passive voice, and non-verb procedural steps. |
-| **✍️ Rewrite Assistant** | Dual-column original vs AI draft refactoring with selectable tone. | Enforces a mandatory **"Human verified"** checkbox before the export button unlocks. |
-| **🧪 Prompt Lab** | Tests two prompt versions side-by-side with identical inputs. | Tracks execution latency and provides an audit toggle to **"Flag Hallucination"**. |
-| **📊 Evaluation** | Golden benchmark testing suite scoring **Hit@3 retrieval recall** and **Accuracy**. | Measures documentation search health with stat cards and a visual bar chart. |
-| **🚩 Gap Report** | Aggregated registry of unanswered developer queries with frequency counts. | Pinpoints missing documentation topics so writers know exactly what to author next. |
-| **⚙️ Automation** | 3-in-1 pipeline: Link integrity checker, frontmatter SEO validator, and release note assembler. | Automates pre-flight publishing checklists and converts git commits into clean changelogs. |
-| **📖 User Policy** | Formal manifest of AI assistance policies, data privacy, and pgvector readiness. | Guarantees transparent human-in-the-loop compliance and zero public model training. |
+| **Ask the Docs** | Semantic question-answering with bracketed source citations `[1]`, `[2]`. | Eliminates speculation; links directly to source files and section titles. |
+| **Knowledge Base** | Ingests **PDF, Word (.docx), Markdown (.md), and Text (.txt)** into indexed 500-token chunks. | Centralizes all company guides, whitepapers, and specs into one searchable vector library. |
+| **Style Linter** | Deterministic regex engine checking **Google & Microsoft documentation guidelines**. | Flags deprecated terms (`blacklist`, `click here`), passive voice, and non-verb procedural steps. |
+| **Rewrite Assistant** | Dual-column original vs AI draft refactoring with selectable tone. | Enforces a mandatory **"Human verified"** checkbox before the export button unlocks. |
+| **Prompt Lab** | Tests two prompt versions side-by-side with identical inputs. | Tracks execution latency and provides an audit toggle to **"Flag Hallucination"**. |
+| **Evaluation** | Golden benchmark testing suite scoring **Hit@3 retrieval recall** and **Accuracy**. | Measures documentation search health with stat cards and a visual bar chart. |
+| **Gap Report** | Aggregated registry of unanswered developer queries with frequency counts. | Pinpoints missing documentation topics so writers know exactly what to author next. |
+| **Automation** | 3-in-1 pipeline: Link integrity checker, frontmatter SEO validator, and release note assembler. | Automates pre-flight publishing checklists and converts git commits into clean changelogs. |
+| **User Policy** | Formal manifest of AI assistance policies, data privacy, and pgvector readiness. | Guarantees transparent human-in-the-loop compliance and zero public model training. |
 
 ---
 
-## 📖 How to Use DocPilot (Step-by-Step)
+## How to Use DocPilot (Step-by-Step)
 
 ### 1. Ingesting Documents (Knowledge Base)
 1. Navigate to **Knowledge Base**.
@@ -106,12 +105,10 @@ flowchart TD
 ### 2. Querying with Citations (Ask the Docs)
 1. Navigate to **Ask the Docs**.
 2. Type any question (e.g. *"What is the webhook retry backoff policy?"*) or click a sample query chip.
-3. If the answer is present in your knowledge base:
+3. DocPilot retrieves the best matching sections and generates an answer citing exact source files:
    - A verified answer card appears with bracketed citations like `[1]`, `[2]`.
    - Click any citation to inspect the source file name, section heading, token count, and exact text.
-4. If top relevance is **below 55%**:
-   - An amber *"Not found in docs"* warning appears.
-   - The question is automatically saved to the **Gap Report**, and a shortcut button lets you author the missing topic.
+   - If relevance is lower, an advisory notice is shown so you can inspect the sources directly, and the query is logged to the Gap Report.
 
 ### 3. Automated Style Guide Linting (Style Linter)
 1. Navigate to **Style Linter**.
@@ -130,13 +127,13 @@ flowchart TD
 
 ---
 
-## 🧠 The Technology Behind DocPilot
+## The Technology Behind DocPilot
 
 ### 1. Generative AI & Retrieval-Augmented Generation (RAG)
 DocPilot uses the official `@google/genai` TypeScript SDK:
 - **Generation Model**: `gemini-3.8-flash` delivers ultra-fast technical answers, structured JSON output, and robust markdown formatting.
 - **Embedding Model**: `gemini-embedding-2-preview` produces 768-dimensional normalized dense vectors capturing semantic intent beyond keyword matching.
-- **Local Fallback Projection**: If network connectivity or API quotas are restricted, DocPilot features a deterministic n-gram vector hash projection, ensuring the interface never crashes.
+- **Hybrid Search Engine**: Fuses vector cosine similarity with BM25 keyword scoring to ensure that documents matching either meaning or specific keywords are surfaced immediately.
 
 ### 2. Vector Memory & Database Abstraction
 All vector operations are decoupled behind `src/lib/store.ts`:
@@ -168,11 +165,11 @@ CREATE INDEX ON document_chunks USING hnsw (embedding vector_cosine_ops);
 | **File Formats** | PDF, DOCX, DOC, MD, TXT | Multimodal parsing handles complex tables and code blocks. |
 | **Max File Size** | 10 MB to 20 MB (~200+ pages) | Gemini context window supports up to 1,000,000 tokens per request. |
 | **Vector Library Size** | 10,000+ chunks (Local) / Millions (pgvector) | Sub-15ms vector scoring across thousands of chunks. |
-| **Search Cutoff** | 0.55 Cosine Similarity | Empirically calibrated to eliminate hallucinated answers. |
+| **Search Engine** | Hybrid Dense Vector + BM25 Keyword | Balances semantic comprehension with exact technical term precision. |
 
 ---
 
-## 💻 Quickstart & Installation
+## Quickstart & Installation
 
 ### Prerequisites
 - Node.js `>= 18.0.0`
@@ -204,7 +201,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 🚢 Production Build & Deployment
+## Production Build & Deployment
 
 ### Build the Static Bundle
 ```bash
@@ -225,7 +222,7 @@ Then add `GEMINI_API_KEY` under **Vercel Project Settings $\rightarrow$ Environm
 
 ---
 
-## 🛡 License & Disclaimer
+## License & Disclaimer
 
 Released under the [Apache 2.0 License](LICENSE).
 

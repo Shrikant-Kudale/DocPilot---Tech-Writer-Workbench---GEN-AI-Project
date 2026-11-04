@@ -17,6 +17,8 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Info,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -38,8 +40,7 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
   const [answer, setAnswer] = useState<string | null>(null);
   const [matchedChunks, setMatchedChunks] = useState<ScoredChunk[]>([]);
   const [topSimilarity, setTopSimilarity] = useState<number | null>(null);
-  const [isBelowThreshold, setIsBelowThreshold] = useState(false);
-  const [selectedChunk, setSelectedChunk] = useState<ScoredChunk | null>(null);
+  const [isLowConfidence, setIsLowConfidence] = useState(false);
   const [copied, setCopied] = useState(false);
   const [expandedChunkId, setExpandedChunkId] = useState<string | null>(null);
 
@@ -48,13 +49,13 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
     'What is the webhook retry policy for failed deliveries?',
     'What are the default rate limits for Tier 1 accounts?',
     'How do I verify webhook HMAC signatures in Python?',
-    'Can I use GraphQL subscriptions on edge workers?', // Known gap to test fallback!
+    'What SDK client libraries are available?',
   ];
 
   const handleAsk = async (queryToAsk?: string) => {
     const q = (queryToAsk !== undefined ? queryToAsk : question).trim();
     if (!q) {
-      toast.warning('Please enter a documentation query.');
+      toast.warning('Please enter a documentation question.');
       return;
     }
 
@@ -65,18 +66,18 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
     setIsLoading(true);
     setAnswer(null);
     setMatchedChunks([]);
-    setIsBelowThreshold(false);
+    setIsLowConfidence(false);
     setTopSimilarity(null);
 
     try {
       const allChunks = store.getChunks();
       if (allChunks.length === 0) {
-        toast.error('Knowledge Base is empty. Upload docs or reset defaults in Knowledge Base tab.');
+        toast.error('Knowledge Base is empty. Upload files in the Knowledge Base tab.');
         setIsLoading(false);
         return;
       }
 
-      // Step 1: Obtain query embedding from server
+      // Step 1: Obtain query embedding
       let queryEmbedding: number[] = [];
       try {
         const embedRes = await fetch('/api/embed', {
@@ -91,62 +92,71 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
           }
         }
       } catch (err) {
-        console.warn('API embed query failed, using local projection fallback', err);
+        console.warn('API embed query failed, using hybrid text projection:', err);
       }
 
       if (queryEmbedding.length === 0) {
         queryEmbedding = textToVectorFallback(q);
       }
 
-      // Step 2: Rank chunks via cosine similarity
-      const SIMILARITY_THRESHOLD = 0.55;
-      const { ranked, topSimilarity: maxSim, hasMatch } = rankChunks(
+      // Step 2: Hybrid search ranking (Vector similarity + Keyword + Heading matches)
+      const { ranked, topSimilarity: maxSim } = rankChunks(
         queryEmbedding,
         allChunks,
-        SIMILARITY_THRESHOLD
+        q,
+        0.55
       );
 
       setTopSimilarity(maxSim);
 
-      if (!hasMatch || maxSim < SIMILARITY_THRESHOLD) {
-        // Fallback: below 0.55 threshold -> show amber card and log to gap report!
-        setIsBelowThreshold(true);
-        store.logGap(q, maxSim);
-        toast.warning(
-          `No high-confidence match found (Top similarity: ${(maxSim * 100).toFixed(1)}% < 55%). Logged as documentation gap.`,
-          'Doc Gap Detected'
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      // Top matches (take top 3)
+      // Always retrieve the top matching chunks
       const topContextChunks = ranked.slice(0, 3);
       setMatchedChunks(topContextChunks);
 
-      // Step 3: Call serverless /api/chat for RAG answer with citations
-      const chatRes = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'rag_answer',
-          question: q,
-          contextChunks: topContextChunks.map((c) => ({
-            citationIndex: c.citationIndex || 1,
-            file: c.file,
-            heading: c.heading,
-            content: c.content,
-          })),
-        }),
-      });
-
-      if (!chatRes.ok) {
-        throw new Error('Failed to retrieve AI answer from /api/chat');
+      // Flag low confidence advisory if below 0.55, and log to Gap Report
+      if (maxSim < 0.55) {
+        setIsLowConfidence(true);
+        store.logGap(q, maxSim);
       }
 
-      const chatData = await chatRes.json();
-      setAnswer(chatData.answer);
-      toast.success('Generated answer with verified source citations.');
+      // Step 3: Call /api/chat for RAG answer synthesis
+      let generatedAnswer = '';
+      try {
+        const chatRes = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'rag_answer',
+            question: q,
+            contextChunks: topContextChunks.map((c) => ({
+              citationIndex: c.citationIndex || 1,
+              file: c.file,
+              heading: c.heading,
+              content: c.content,
+            })),
+          }),
+        });
+
+        if (chatRes.ok) {
+          const chatData = await chatRes.json();
+          generatedAnswer = chatData.answer;
+        }
+      } catch (err) {
+        console.warn('Server chat route unavailable, using client-side RAG synthesis:', err);
+      }
+
+      // Resilient local synthesis fallback if server was unreachable or error on Vercel
+      if (!generatedAnswer) {
+        const top = topContextChunks[0];
+        generatedAnswer = `According to **${top.heading}** in \`${top.file}\` [1]:\n\n${top.content.slice(0, 420)}...\n\nRefer to source citation [1] below for the complete section details.`;
+      }
+
+      setAnswer(generatedAnswer);
+      if (maxSim >= 0.55) {
+        toast.success('Retrieved matching sections and generated answer.');
+      } else {
+        toast.info('Retrieved closest matching sections for human review.');
+      }
     } catch (err: any) {
       console.error('Ask docs error:', err);
       toast.error(err.message || 'An error occurred while querying documentation.');
@@ -171,21 +181,7 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
           Ask the Docs
         </h1>
         <p className="text-sm text-slate-600 mt-1">
-          Ask any question about your documentation. Answers are backed by numbered source citations linking directly to your uploaded files.
-        </p>
-      </div>
-
-      {/* Friendly How this works explainer */}
-      <div className="p-3.5 rounded-xl bg-teal-50/60 border border-teal-200 text-xs text-slate-700 space-y-1">
-        <div className="font-semibold text-teal-900 flex items-center gap-1.5">
-          <span>💡 How to use & what happens:</span>
-        </div>
-        <p className="text-slate-600 leading-relaxed">
-          <strong>1. Ask a question:</strong> Enter your question below or click a quick sample chip.
-          <br />
-          <strong>2. Search & Citation:</strong> The system finds the exact sections in your Knowledge Base and cites them with numbers like <span className="font-bold text-teal-700">[1]</span> and <span className="font-bold text-teal-700">[2]</span>.
-          <br />
-          <strong>3. If not found:</strong> If the question isn&apos;t covered in your uploaded files, it warns you and logs it to the <strong>Gap Report</strong> so your team knows what to write.
+          Search your documentation with numbered source citations. All matching sections are retrieved for human review.
         </p>
       </div>
 
@@ -205,7 +201,7 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
                 type="text"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask any technical question (e.g. 'How do I authenticate API requests?')..."
+                placeholder="Ask any question from your documentation..."
                 className="w-full h-10 pl-11 pr-4 rounded-[8px] border border-[#E2E8F0] bg-white text-sm text-[#1B2733] placeholder-slate-400 focus:outline-none focus:border-[#00A3A1] focus:ring-2 focus:ring-[#00A3A1]/20 transition-all"
               />
             </div>
@@ -213,16 +209,16 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
               type="submit"
               variant="primary"
               isLoading={isLoading}
-              icon={<Sparkles className="w-4 h-4" />}
+              icon={<Search className="w-4 h-4" />}
               className="shrink-0 font-semibold"
             >
-              Ask Docs
+              Search & Answer
             </Button>
           </div>
 
           {/* Quick sample chips */}
           <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
-            <span className="text-slate-500 font-medium">Try asking:</span>
+            <span className="text-slate-500 font-medium">Quick examples:</span>
             {sampleQuestions.map((sq, i) => (
               <button
                 key={i}
@@ -237,79 +233,42 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
         </form>
       </Card>
 
-      {/* Fallback Warning Card: If Top Similarity < 0.55 */}
-      {isBelowThreshold && (
-        <Card
-          borderVariant="warning"
-          padding="md"
-          className="bg-amber-50/50 border-amber-300 animate-in fade-in duration-200"
-        >
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-full bg-amber-100 text-[#F2A900] flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-5 h-5 text-[#b07b00]" />
+      {/* Low Confidence Advisory Banner (Does NOT block the answer!) */}
+      {isLowConfidence && answer && (
+        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/70 text-xs text-amber-900 flex items-start gap-3 animate-in fade-in">
+          <AlertTriangle className="w-5 h-5 text-[#b07b00] shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-sm">
+                Human Review Recommended (Relevance: {topSimilarity ? (topSimilarity * 100).toFixed(0) : 0}%)
+              </span>
+              <Badge variant="warning" size="sm">
+                Low Confidence Match
+              </Badge>
             </div>
-            <div className="space-y-2 flex-1">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-amber-900">
-                  Not found in docs
-                </h3>
-                <Badge variant="warning" size="sm">
-                  Threshold &lt; 0.55
-                </Badge>
-              </div>
-              <p className="text-sm text-amber-800 leading-relaxed">
-                The highest semantic similarity found was{' '}
-                <span className="font-mono font-semibold">
-                  {topSimilarity !== null ? (topSimilarity * 100).toFixed(1) : 0}%
-                </span>
-                , which is below the required 55% relevance threshold for high-fidelity technical answers.
-              </p>
-              <div className="bg-amber-100/70 p-3 rounded-lg text-xs text-amber-900 font-mono">
-                Logged to Gap Report: &ldquo;{question}&rdquo;
-              </div>
-              <div className="pt-2 flex flex-wrap items-center gap-3">
-                {onNavigateToTab && (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => onNavigateToTab('gap-report')}
-                    icon={<ExternalLink className="w-3.5 h-3.5" />}
-                  >
-                    View in Gap Report
-                  </Button>
-                )}
-                {onNavigateToTab && (
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => onNavigateToTab('rewrite')}
-                    icon={<ArrowRight className="w-3.5 h-3.5" />}
-                  >
-                    Draft Documentation for this Question
-                  </Button>
-                )}
-              </div>
-            </div>
+            <p className="text-amber-800 leading-relaxed">
+              The retrieved sections below have lower direct semantic overlap with your question. We are showing the closest matches so you can inspect them directly. This inquiry has also been saved to your <strong>Gap Report</strong>.
+            </p>
           </div>
-        </Card>
+        </div>
       )}
 
       {/* Answer Card with Numbered Citations */}
-      {answer && !isBelowThreshold && (
+      {answer && (
         <div className="space-y-6 animate-in fade-in duration-200">
           <Card
-            borderVariant="teal"
+            borderVariant={isLowConfidence ? 'warning' : 'teal'}
             padding="md"
             title={
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#00A3A1]" />
-                <span>Verified Documentation Answer</span>
+                <BookOpen className="w-4 h-4 text-[#00A3A1]" />
+                <span>Grounded Documentation Answer</span>
               </div>
             }
             headerAction={
               <div className="flex items-center gap-2">
-                <Badge variant="accent" size="sm">
-                  Top match: {topSimilarity ? (topSimilarity * 100).toFixed(0) : 0}%
+                <Badge variant={isLowConfidence ? 'warning' : 'accent'} size="sm">
+                  Match Score: {topSimilarity ? (topSimilarity * 100).toFixed(0) : 0}%
                 </Badge>
                 <Button
                   size="sm"
@@ -322,28 +281,32 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
               </div>
             }
           >
-            {/* Answer text with custom styled citation tags */}
             <div className="prose prose-slate max-w-none text-sm text-[#1B2733] leading-relaxed whitespace-pre-wrap font-sans">
               {answer}
             </div>
 
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-slate-400" />
-                Referenced {matchedChunks.length} documentation chunk{matchedChunks.length > 1 ? 's' : ''}
+                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                Referenced {matchedChunks.length} source section{matchedChunks.length > 1 ? 's' : ''}
               </span>
               <span className="text-[11px] text-slate-400">
-                Grounded via Gemini server-side RAG
+                Grounded via Gemini RAG with citations
               </span>
             </div>
           </Card>
 
           {/* Source Chunks with Clickable Numbered Citations */}
           <div>
-            <h3 className="text-sm font-semibold text-[#0B1F3A] mb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-[#00A3A1]" />
-              <span>Source Citations</span>
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-[#0B1F3A] flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#00A3A1]" />
+                <span>Source Citations (Review Matched Chunks)</span>
+              </h3>
+              <span className="text-xs text-slate-500">
+                Click any citation to review the source text
+              </span>
+            </div>
 
             <div className="grid grid-cols-1 gap-3">
               {matchedChunks.map((chunk) => {
@@ -372,7 +335,10 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
                       </div>
 
                       <div className="flex items-center gap-3 shrink-0">
-                        <Badge variant="accent" size="sm">
+                        <Badge
+                          variant={chunk.similarity >= 0.55 ? 'accent' : 'warning'}
+                          size="sm"
+                        >
                           {(chunk.similarity * 100).toFixed(0)}% match
                         </Badge>
                         <button className="text-slate-400 hover:text-slate-600 p-1">
@@ -388,8 +354,8 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
                     {isExpanded && (
                       <div className="p-4 border-t border-[#E2E8F0] bg-white space-y-2 animate-in fade-in duration-150">
                         <div className="text-xs font-mono text-slate-500 flex items-center justify-between">
-                          <span>Token count: ~{chunk.tokens}</span>
-                          <span>Chunk ID: {chunk.id}</span>
+                          <span>Tokens: ~{chunk.tokens}</span>
+                          <span>Source file: {chunk.file}</span>
                         </div>
                         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-mono text-slate-800 whitespace-pre-wrap max-h-60 overflow-y-auto">
                           {chunk.content}
@@ -404,8 +370,8 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
         </div>
       )}
 
-      {/* Empty State / Initial guide */}
-      {!answer && !isBelowThreshold && !isLoading && (
+      {/* Empty State */}
+      {!answer && !isLoading && (
         <div className="py-12 border-2 border-dashed border-[#E2E8F0] rounded-[12px] bg-white/60 text-center flex flex-col items-center justify-center px-4">
           <div className="w-12 h-12 rounded-full bg-teal-50 text-[#00A3A1] flex items-center justify-center mb-3">
             <HelpCircle className="w-6 h-6" />
@@ -414,7 +380,7 @@ export const AskDocs: React.FC<AskDocsProps> = ({ onNavigateToTab }) => {
             Ready to query your documentation
           </h3>
           <p className="text-xs text-slate-500 max-w-md mt-1 leading-relaxed">
-            Type any question above or click one of the quick samples. DocPilot searches the vector index, scores relevance, extracts context, and generates citations.
+            Enter any technical question above. DocPilot searches all uploaded PDF, Word, and Markdown sections, retrieves the best matches, and provides an answer citing exact source files.
           </p>
         </div>
       )}

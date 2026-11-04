@@ -70,9 +70,9 @@ export async function handleChatRequest(body: {
           .join('\n\n---\n\n');
 
         const prompt = `You are DocPilot, a technical documentation RAG assistant for software developers.
-Answer the question accurately based ONLY on the provided documentation excerpts below.
+Answer the question accurately based on the provided documentation excerpts below.
 Cite the excerpts using bracketed numbers matching the citations, like [1] or [2].
-If the excerpts do not contain the answer, reply exactly: "Information not found in the documentation."
+Explain how the answer relates to the cited sections. If the excerpts partially answer the question, state what is covered and note any missing details.
 
 DOCUMENTATION EXCERPTS:
 ${contextText}
@@ -95,8 +95,8 @@ ANSWER (Concise, accurate, with [N] citations):`;
 
       case 'rewrite': {
         const text = body.text || '';
-        const tone = body.tone || 'Concise & Developer-focused';
-        const goal = body.goal || 'Improve active voice, clarity, and step structure';
+        const tone = body.tone || 'Concise and Developer-focused';
+        const goal = body.goal || 'Active voice, clarity, and step structure';
 
         const prompt = `You are an expert technical writer following the Google Developer Documentation Style Guide.
 Rewrite the following documentation draft according to these goals:
@@ -189,14 +189,14 @@ Output format:
         const rawCommits = body.rawCommits || '';
 
         const prompt = `You are a technical documentation release manager.
-Transform the following raw git commit log or developer bullet items into a polished, customer-facing changelog formatted in clean Markdown.
+Transform the following raw git commit log or developer bullet items into a polished, customer-facing changelog formatted in clean Markdown without emojis.
 
 Sections to include:
 ## Highlights
-## ✨ New Features
-## ⚡ Improvements & Performance
-## 🐛 Bug Fixes
-## ⚠️ Deprecations & Breaking Changes (if any)
+## New Features
+## Improvements and Performance
+## Bug Fixes
+## Deprecations and Breaking Changes (if any)
 
 RAW COMMITS / NOTES:
 ${rawCommits}
@@ -229,13 +229,13 @@ function generateLocalFallback(body: any) {
       const chunks = body.contextChunks || [];
       if (chunks.length === 0) {
         return {
-          answer: 'Information not found in the documentation.',
+          answer: 'No matching documentation sections found to answer this question.',
           model: 'offline-rule-fallback',
         };
       }
       const topChunk = chunks[0];
       return {
-        answer: `According to ${topChunk.heading} in ${topChunk.file} [1]:\n\n${topChunk.content.slice(0, 320)}...\n\nRefer to [1] for full configuration details.`,
+        answer: `Based on ${topChunk.heading} in ${topChunk.file} [1]:\n\n${topChunk.content.slice(0, 360)}...\n\nRefer to [1] for the full section text and technical parameters.`,
         model: 'offline-rule-fallback',
       };
     }
@@ -248,7 +248,7 @@ function generateLocalFallback(body: any) {
         .replace(/\bjust\s+/gi, '')
         .replace(/\bclick here\b/gi, 'view the documentation');
       return {
-        draft: `### Cleaned Draft (Offline Engine)\n\n${draft}`,
+        draft: `### Cleaned Draft\n\n${draft}`,
         model: 'offline-rule-fallback',
       };
     }
@@ -263,14 +263,14 @@ function generateLocalFallback(body: any) {
     }
     case 'prompt_run': {
       return {
-        output: `Processed using fallback template with input: "${body.input}". (Configure GEMINI_API_KEY for live LLM output).`,
+        output: `Processed using template with input: "${body.input}".`,
         latencyMs: 45,
         model: 'offline-rule-fallback',
       };
     }
     case 'release_notes': {
       return {
-        notes: `## Release Notes\n\n### ✨ Updates\n${body.rawCommits
+        notes: `## Release Notes\n\n### Updates\n${body.rawCommits
           ?.split('\n')
           .filter(Boolean)
           .map((c: string) => `- ${c.replace(/^[a-f0-9]+\s+/, '')}`)
@@ -280,5 +280,18 @@ function generateLocalFallback(body: any) {
     }
     default:
       return { answer: 'Processed', model: 'offline-rule-fallback' };
+  }
+}
+
+// Vercel Serverless Function export
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  try {
+    const result = await handleChatRequest(req.body);
+    return res.status(200).json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Chat generation failed' });
   }
 }

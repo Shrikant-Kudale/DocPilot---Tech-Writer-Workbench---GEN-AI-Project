@@ -84,8 +84,8 @@ export const Evaluation: React.FC = () => {
           queryVec = textToVectorFallback(q.question);
         }
 
-        // Step 2: Rank chunks
-        const { ranked, topSimilarity } = rankChunks(queryVec, allChunks, 0.0);
+        // Step 2: Rank chunks with hybrid search
+        const { ranked, topSimilarity } = rankChunks(queryVec, allChunks, q.question);
         const top3 = ranked.slice(0, 3);
         const top1 = top3[0];
 
@@ -276,7 +276,7 @@ export const Evaluation: React.FC = () => {
       {/* Friendly How this works explainer */}
       <div className="p-3.5 rounded-xl bg-teal-50/60 border border-teal-200 text-xs text-slate-700 space-y-1">
         <div className="font-semibold text-teal-900 flex items-center gap-1.5">
-          <span>💡 How to use & what happens:</span>
+          <span>How to use this tool:</span>
         </div>
         <p className="text-slate-600 leading-relaxed">
           <strong>1. Golden Questions:</strong> The table below lists standard benchmark questions and the exact file that is supposed to answer them.
