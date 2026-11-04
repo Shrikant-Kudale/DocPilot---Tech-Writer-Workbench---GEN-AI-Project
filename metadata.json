@@ -1,0 +1,8 @@
+{
+  "name": "DocPilot",
+  "description": "AI documentation workbench for technical writers featuring RAG doc search, style linting, human-verified rewrites, prompt lab, evaluation, and doc automation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

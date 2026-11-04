@@ -1,0 +1,47 @@
+[
+  {
+    "id": "gold-1",
+    "question": "How do I authenticate API requests?",
+    "expectedChunkId": "chunk-auth-1",
+    "expectedFile": "authentication.md",
+    "expectedHeading": "Bearer Token Authentication",
+    "expectedKeywords": ["Authorization header", "Bearer", "API key", "401 Unauthorized"],
+    "category": "Security"
+  },
+  {
+    "id": "gold-2",
+    "question": "What is the webhook retry policy if our server returns a 500 error?",
+    "expectedChunkId": "chunk-webhook-2",
+    "expectedFile": "webhooks.md",
+    "expectedHeading": "Retry Schedule & Backoff",
+    "expectedKeywords": ["exponential backoff", "5 attempts", "24 hours", "idempotency"],
+    "category": "Integrations"
+  },
+  {
+    "id": "gold-3",
+    "question": "What are the default rate limits for Tier 1 accounts?",
+    "expectedChunkId": "chunk-ratelimit-1",
+    "expectedFile": "rate-limits.md",
+    "expectedHeading": "Account Tier Limits",
+    "expectedKeywords": ["100 requests per minute", "HTTP 429", "Retry-After header"],
+    "category": "API Limits"
+  },
+  {
+    "id": "gold-4",
+    "question": "How do I verify webhook signatures using HMAC SHA-256?",
+    "expectedChunkId": "chunk-webhook-1",
+    "expectedFile": "webhooks.md",
+    "expectedHeading": "Signature Verification",
+    "expectedKeywords": ["X-DocPilot-Signature", "HMAC SHA-256", "secret key", "timing attack"],
+    "category": "Security"
+  },
+  {
+    "id": "gold-5",
+    "question": "Can I request custom quotas or higher concurrency?",
+    "expectedChunkId": "chunk-ratelimit-2",
+    "expectedFile": "rate-limits.md",
+    "expectedHeading": "Requesting Quota Increases",
+    "expectedKeywords": ["Enterprise tier", "support ticket", "burst allowance"],
+    "category": "Billing & Quotas"
+  }
+]

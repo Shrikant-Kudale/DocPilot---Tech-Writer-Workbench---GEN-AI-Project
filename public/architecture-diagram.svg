@@ -1,0 +1,246 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" width="100%" height="100%" style="background:#F7F9FB; font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;">
+  <defs>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1F3A"/>
+      <stop offset="100%" stop-color="#15325B"/>
+    </linearGradient>
+    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A3A1"/>
+      <stop offset="100%" stop-color="#007B7A"/>
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#0B1F3A" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="1200" height="680" fill="#F7F9FB"/>
+  <rect x="20" y="20" width="1160" height="640" rx="16" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" filter="url(#shadow)"/>
+
+  <!-- Title Bar -->
+  <g transform="translate(50, 50)">
+    <rect width="36" height="36" rx="8" fill="#00A3A1"/>
+    <path d="M18 10 L26 18 L18 26 L10 18 Z" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="18" cy="18" r="3" fill="#FFFFFF"/>
+    <text x="48" y="24" font-size="20" font-weight="700" fill="#0B1F3A" letter-spacing="-0.5">DocPilot Architectural Pipeline</text>
+    <text x="48" y="40" font-size="12" fill="#64748B">End-to-End Technical Documentation RAG, Quality Governance &amp; Style Automation</text>
+  </g>
+
+  <!-- Status Chip -->
+  <g transform="translate(980, 50)">
+    <rect width="170" height="32" rx="16" fill="#E6FFFA" stroke="#00A3A1" stroke-width="1"/>
+    <circle cx="16" cy="16" r="4" fill="#00A3A1"/>
+    <text x="28" y="20" font-size="11.5" font-weight="600" fill="#007B7A">Human-in-the-Loop</text>
+  </g>
+
+  <!-- ==================== COLUMN 1: INGESTION ==================== -->
+  <g transform="translate(50, 115)">
+    <rect width="210" height="500" rx="12" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="20" y="32" font-size="13" font-weight="700" fill="#0B1F3A">1. MULTI-FORMAT INGESTION</text>
+    <text x="20" y="48" font-size="11" fill="#64748B">Raw document inputs</text>
+
+    <!-- Doc Types -->
+    <g transform="translate(15, 65)">
+      <rect width="180" height="52" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <rect x="12" y="14" width="24" height="24" rx="4" fill="#FEE2E2"/>
+      <text x="24" y="30" font-size="10" font-weight="700" fill="#DC2626" text-anchor="middle">PDF</text>
+      <text x="46" y="26" font-size="12" font-weight="600" fill="#1E293B">PDF Documents</text>
+      <text x="46" y="40" font-size="10" fill="#64748B">Whitepapers &amp; manuals</text>
+    </g>
+
+    <g transform="translate(15, 127)">
+      <rect width="180" height="52" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <rect x="12" y="14" width="24" height="24" rx="4" fill="#DBEAFE"/>
+      <text x="24" y="30" font-size="10" font-weight="700" fill="#2563EB" text-anchor="middle">DOC</text>
+      <text x="46" y="26" font-size="12" font-weight="600" fill="#1E293B">Word (.docx / .doc)</text>
+      <text x="46" y="40" font-size="10" fill="#64748B">Draft specifications</text>
+    </g>
+
+    <g transform="translate(15, 189)">
+      <rect width="180" height="52" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <rect x="12" y="14" width="24" height="24" rx="4" fill="#DCFCE7"/>
+      <text x="24" y="30" font-size="10" font-weight="700" fill="#16A34A" text-anchor="middle">MD</text>
+      <text x="46" y="26" font-size="12" font-weight="600" fill="#1E293B">Markdown (.md)</text>
+      <text x="46" y="40" font-size="10" fill="#64748B">Developer docs &amp; guides</text>
+    </g>
+
+    <g transform="translate(15, 251)">
+      <rect width="180" height="52" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <rect x="12" y="14" width="24" height="24" rx="4" fill="#F1F5F9"/>
+      <text x="24" y="30" font-size="10" font-weight="700" fill="#475569" text-anchor="middle">TXT</text>
+      <text x="46" y="26" font-size="12" font-weight="600" fill="#1E293B">Plain Text (.txt)</text>
+      <text x="46" y="40" font-size="10" fill="#64748B">Release logs &amp; readmes</text>
+    </g>
+
+    <g transform="translate(15, 325)">
+      <rect width="180" height="150" rx="8" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1"/>
+      <text x="14" y="24" font-size="11" font-weight="700" fill="#0F766E">Smart Parser (/api/parse)</text>
+      <text x="14" y="42" font-size="10" fill="#115E59">• Multimodal PDF parsing</text>
+      <text x="14" y="58" font-size="10" fill="#115E59">• Headings &amp; section extraction</text>
+      <text x="14" y="74" font-size="10" fill="#115E59">• Code block &amp; table isolation</text>
+      <text x="14" y="90" font-size="10" fill="#115E59">• Standardized Markdown stream</text>
+      <rect x="14" y="105" width="152" height="30" rx="4" fill="#00A3A1"/>
+      <text x="90" y="124" font-size="10.5" font-weight="600" fill="#FFFFFF" text-anchor="middle">500-Token Chunking</text>
+    </g>
+  </g>
+
+  <!-- Connector Line 1 -> 2 -->
+  <path d="M 260 365 L 300 365" stroke="#00A3A1" stroke-width="2" stroke-dasharray="4 4"/>
+  <polygon points="300,361 308,365 300,369" fill="#00A3A1"/>
+
+  <!-- ==================== COLUMN 2: VECTOR EMBEDDING & STORAGE ==================== -->
+  <g transform="translate(310, 115)">
+    <rect width="250" height="500" rx="12" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="20" y="32" font-size="13" font-weight="700" fill="#0B1F3A">2. VECTOR INDEX &amp; STORAGE</text>
+    <text x="20" y="48" font-size="11" fill="#64748B">Semantic memory engine</text>
+
+    <!-- Gemini Embedding Box -->
+    <g transform="translate(15, 65)">
+      <rect width="220" height="105" rx="8" fill="#FFFFFF" stroke="#00A3A1" stroke-width="1.5"/>
+      <rect x="14" y="12" width="65" height="18" rx="4" fill="#00A3A1"/>
+      <text x="46" y="25" font-size="9" font-weight="700" fill="#FFFFFF" text-anchor="middle">GEMINI API</text>
+      <text x="14" y="46" font-size="12" font-weight="700" fill="#0B1F3A">gemini-embedding-2</text>
+      <text x="14" y="62" font-size="10.5" fill="#475569">Server-side vector generation</text>
+      <text x="14" y="78" font-size="10" fill="#64748B">• 768-dim normalized embeddings</text>
+      <text x="14" y="92" font-size="10" fill="#64748B">• Resilient local cosine fallback</text>
+    </g>
+
+    <!-- Storage Layer Box -->
+    <g transform="translate(15, 185)">
+      <rect width="220" height="145" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="14" y="24" font-size="12" font-weight="700" fill="#0B1F3A">Storage Abstraction Layer</text>
+      <text x="14" y="38" font-size="10" fill="#64748B">src/lib/store.ts unified adapter</text>
+      
+      <rect x="14" y="50" width="192" height="36" rx="6" fill="#F1F5F9"/>
+      <text x="24" y="68" font-size="11" font-weight="600" fill="#0F172A">Default: JSON Vector Store</text>
+      <text x="24" y="80" font-size="9.5" fill="#64748B">Pre-seeded fallback, local latency &lt;15ms</text>
+
+      <rect x="14" y="94" width="192" height="36" rx="6" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1"/>
+      <text x="24" y="112" font-size="11" font-weight="600" fill="#065F46">Supabase pgvector</text>
+      <text x="24" y="124" font-size="9.5" fill="#047857">100% compatible drop-in SQL schema</text>
+    </g>
+
+    <!-- Cosine Matcher -->
+    <g transform="translate(15, 345)">
+      <rect width="220" height="130" rx="8" fill="#0B1F3A"/>
+      <text x="16" y="26" font-size="12" font-weight="700" fill="#FFFFFF">Cosine Similarity Engine</text>
+      <text x="16" y="44" font-size="10.5" fill="#94A3B8">dotProduct(A, B) / (||A|| × ||B||)</text>
+      
+      <rect x="16" y="58" width="188" height="26" rx="4" fill="#1E293B"/>
+      <text x="24" y="75" font-size="10.5" font-weight="600" fill="#FCD34D">Threshold Gate: 0.55 Cutoff</text>
+      
+      <text x="16" y="102" font-size="10" fill="#38BDF8">&gt;= 0.55  →  RAG Citations [1], [2]</text>
+      <text x="16" y="118" font-size="10" fill="#F87171">&lt; 0.55   →  Amber Card + Gap Log</text>
+    </g>
+  </g>
+
+  <!-- Connector Line 2 -> 3 -->
+  <path d="M 560 365 L 600 365" stroke="#00A3A1" stroke-width="2"/>
+  <polygon points="600,361 608,365 600,369" fill="#00A3A1"/>
+
+  <!-- ==================== COLUMN 3: RAG SEARCH & LLM ==================== -->
+  <g transform="translate(610, 115)">
+    <rect width="250" height="500" rx="12" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="20" y="32" font-size="13" font-weight="700" fill="#0B1F3A">3. REASONING &amp; GENERATION</text>
+    <text x="20" y="48" font-size="11" fill="#64748B">Serverless API backend</text>
+
+    <!-- Gemini 3.8 Flash Box -->
+    <g transform="translate(15, 65)">
+      <rect width="220" height="110" rx="8" fill="#FFFFFF" stroke="#00A3A1" stroke-width="1.5"/>
+      <rect x="14" y="12" width="115" height="18" rx="4" fill="#0B1F3A"/>
+      <text x="71" y="25" font-size="9" font-weight="700" fill="#FFFFFF" text-anchor="middle">GEMINI 3.8 FLASH</text>
+      <text x="14" y="48" font-size="12" font-weight="700" fill="#0B1F3A">Context-Grounded RAG</text>
+      <text x="14" y="66" font-size="10.5" fill="#475569">Numbered Citation Generator</text>
+      <text x="14" y="82" font-size="10" fill="#64748B">• Cites source file &amp; section</text>
+      <text x="14" y="96" font-size="10" fill="#64748B">• Zero speculative hallucinations</text>
+    </g>
+
+    <!-- Style Engine Box -->
+    <g transform="translate(15, 190)">
+      <rect width="220" height="135" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="14" y="24" font-size="12" font-weight="700" fill="#0B1F3A">Technical Style Rules</text>
+      <text x="14" y="40" font-size="10.5" fill="#64748B">Google &amp; Microsoft style guides</text>
+      
+      <rect x="14" y="52" width="192" height="22" rx="4" fill="#FEE2E2"/>
+      <text x="22" y="67" font-size="10" font-weight="600" fill="#B91C1C">Terminology: allowlist/denylist</text>
+
+      <rect x="14" y="78" width="192" height="22" rx="4" fill="#FEF3C7"/>
+      <text x="22" y="93" font-size="10" font-weight="600" fill="#B45309">Voice: Eliminate passive voice</text>
+
+      <rect x="14" y="104" width="192" height="22" rx="4" fill="#E0F2FE"/>
+      <text x="22" y="119" font-size="10" font-weight="600" fill="#0369A1">Steps: Imperative action verbs</text>
+    </g>
+
+    <!-- Human Verification Box -->
+    <g transform="translate(15, 345)">
+      <rect width="220" height="130" rx="8" fill="#ECFDF5" stroke="#10B981" stroke-width="1.5"/>
+      <circle cx="32" cy="30" r="12" fill="#10B981"/>
+      <path d="M26 30 L30 34 L38 26" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+      <text x="52" y="34" font-size="12" font-weight="700" fill="#065F46">Human Verified Gate</text>
+      <text x="16" y="60" font-size="10.5" fill="#047857">Mandatory safety checkbox</text>
+      <text x="16" y="80" font-size="10" fill="#047857">• Blocks unreviewed code export</text>
+      <text x="16" y="96" font-size="10" fill="#047857">• Enforces author accountability</text>
+      <text x="16" y="112" font-size="10" fill="#047857">• Download Markdown enabled</text>
+    </g>
+  </g>
+
+  <!-- Connector Line 3 -> 4 -->
+  <path d="M 860 365 L 900 365" stroke="#00A3A1" stroke-width="2"/>
+  <polygon points="900,361 908,365 900,369" fill="#00A3A1"/>
+
+  <!-- ==================== COLUMN 4: WORKBENCH MODULES ==================== -->
+  <g transform="translate(910, 115)">
+    <rect width="240" height="500" rx="12" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1"/>
+    <text x="20" y="32" font-size="13" font-weight="700" fill="#0B1F3A">4. USER WORKBENCH TABS</text>
+    <text x="20" y="48" font-size="11" fill="#64748B">Front-end modules</text>
+
+    <!-- Modules list -->
+    <g transform="translate(15, 65)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Ask the Docs (RAG)</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">Numbered citations &amp; 0.55 cutoff</text>
+    </g>
+
+    <g transform="translate(15, 115)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Knowledge Base</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">PDF, Word, Markdown chunk index</text>
+    </g>
+
+    <g transform="translate(15, 165)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Style Linter</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">Terminology, voice &amp; step checks</text>
+    </g>
+
+    <g transform="translate(15, 215)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Rewrite Assistant</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">Dual-column verified Markdown export</text>
+    </g>
+
+    <g transform="translate(15, 265)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Prompt Lab</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">Side-by-side versions &amp; hallucination flag</text>
+    </g>
+
+    <g transform="translate(15, 315)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Evaluation Benchmark</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">Hit@3 recall scoring &amp; accuracy chart</text>
+    </g>
+
+    <g transform="translate(15, 365)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Gap Report</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">Unanswered questions frequency log</text>
+    </g>
+
+    <g transform="translate(15, 415)">
+      <rect width="210" height="42" rx="6" fill="#FFFFFF" stroke="#E2E8F0"/>
+      <text x="14" y="22" font-size="11" font-weight="700" fill="#0B1F3A">Automation Suite</text>
+      <text x="14" y="34" font-size="9.5" fill="#64748B">Links, frontmatter &amp; release notes</text>
+    </g>
+  </g>
+</svg>

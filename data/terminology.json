@@ -1,0 +1,93 @@
+[
+  {
+    "term": "blacklist",
+    "replacement": "denylist / blocklist",
+    "severity": "error",
+    "category": "Inclusivity",
+    "reason": "Avoid racially charged terminology. Use denylist or blocklist instead."
+  },
+  {
+    "term": "whitelist",
+    "replacement": "allowlist",
+    "severity": "error",
+    "category": "Inclusivity",
+    "reason": "Avoid racially charged terminology. Use allowlist instead."
+  },
+  {
+    "term": "master/slave",
+    "replacement": "primary/replica or main/secondary",
+    "severity": "error",
+    "category": "Inclusivity",
+    "reason": "Use non-oppressive architecture terms like primary/replica or leader/follower."
+  },
+  {
+    "term": "click here",
+    "replacement": "descriptive link text (e.g., 'View the API Guide')",
+    "severity": "error",
+    "category": "Accessibility",
+    "reason": "Link text should describe the destination for screen readers and search engines."
+  },
+  {
+    "term": "simply",
+    "replacement": "omit word",
+    "severity": "warn",
+    "category": "Clarity & Tone",
+    "reason": "Words like 'simply' alienate users if the step is actually complex or fails."
+  },
+  {
+    "term": "just",
+    "replacement": "omit word",
+    "severity": "warn",
+    "category": "Clarity & Tone",
+    "reason": "Minimizing words can frustrate users encountering unexpected errors."
+  },
+  {
+    "term": "obviously",
+    "replacement": "omit word",
+    "severity": "warn",
+    "category": "Clarity & Tone",
+    "reason": "Never assume technical knowledge is obvious to the reader."
+  },
+  {
+    "term": "easy",
+    "replacement": "straightforward / omit",
+    "severity": "info",
+    "category": "Clarity & Tone",
+    "reason": "What is easy for authors may not be easy for novice readers."
+  },
+  {
+    "term": "please",
+    "replacement": "direct instruction (e.g. 'Enter your key')",
+    "severity": "info",
+    "category": "Conciseness",
+    "reason": "Politeness markers add unnecessary word count in procedural documentation."
+  },
+  {
+    "term": "i.e.",
+    "replacement": "that is",
+    "severity": "warn",
+    "category": "Internationalization",
+    "reason": "Latin abbreviations hinder non-native English speakers."
+  },
+  {
+    "term": "e.g.",
+    "replacement": "for example",
+    "severity": "warn",
+    "category": "Internationalization",
+    "reason": "Prefer plain English 'for example' over Latin abbreviations."
+  },
+  {
+    "term": "abort",
+    "replacement": "cancel / stop",
+    "severity": "info",
+    "category": "Clarity & Tone",
+    "reason": "Prefer 'cancel', 'stop', or 'end' unless referring to an explicit POSIX abort signal."
+  },
+  {
+    "term": "as mentioned above",
+    "replacement": "as noted earlier / link to section",
+    "severity": "info",
+    "category": "Usability",
+    "reason": "Spatial references like 'above' and 'below' fail on responsive and mobile layouts."
+  }
+]

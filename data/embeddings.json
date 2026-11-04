@@ -1,0 +1,74 @@
+[
+  {
+    "id": "chunk-auth-1",
+    "file": "authentication.md",
+    "heading": "Bearer Token Authentication",
+    "content": "# Bearer Token Authentication\n\nAll API requests must include a valid Bearer token in the HTTP `Authorization` header:\n\n```http\nAuthorization: Bearer sec_live_9f82bc7190ad\n```\n\nIf you omit the header or pass an invalid token, the server returns an `HTTP 401 Unauthorized` response with error code `invalid_token`. Tokens expire after 24 hours unless generated as a Long-Lived Service Key in the security console. Always store tokens securely in server-side environment variables and never commit them into client code.",
+    "tokens": 92,
+    "createdAt": "2026-11-01T10:00:00.000Z",
+    "embedding": [0.082, 0.412, -0.194, 0.512, 0.043, 0.321, -0.089, 0.245, 0.118, -0.034, 0.489, 0.102, -0.214, 0.354, 0.178, -0.092, 0.281, 0.142, -0.165, 0.398, 0.054, -0.012, 0.312, 0.201, -0.187, 0.245, 0.119, -0.076, 0.421, 0.098, -0.154, 0.298]
+  },
+  {
+    "id": "chunk-auth-2",
+    "file": "authentication.md",
+    "heading": "API Key Rotation & Scopes",
+    "content": "## API Key Rotation & Scopes\n\nDocPilot supports granular permissions for workspace API tokens. You can restrict tokens to specific resources:\n- `docs:read` - Read documentation collections and chunk indices.\n- `docs:write` - Ingest, modify, and delete document sources.\n- `eval:run` - Execute golden dataset evaluations.\n\nKeys should be rotated every 90 days. During rotation, both the old and new keys remain active for a grace period of 48 hours to avoid service disruption.",
+    "tokens": 88,
+    "createdAt": "2026-11-01T10:05:00.000Z",
+    "embedding": [0.074, 0.389, -0.167, 0.491, 0.039, 0.298, -0.076, 0.221, 0.105, -0.028, 0.452, 0.089, -0.198, 0.327, 0.165, -0.084, 0.264, 0.131, -0.152, 0.376, 0.048, -0.010, 0.289, 0.187, -0.174, 0.231, 0.108, -0.069, 0.398, 0.091, -0.142, 0.281]
+  },
+  {
+    "id": "chunk-webhook-1",
+    "file": "webhooks.md",
+    "heading": "Signature Verification",
+    "content": "# Webhook Signature Verification\n\nTo ensure webhook events originate from DocPilot and have not been tampered with in transit, inspect the `X-DocPilot-Signature` header included with every delivery.\n\nThe signature is generated using HMAC SHA-256 with your webhook endpoint secret as the key:\n\n```python\ncomputed_sig = hmac.new(webhook_secret.encode('utf-8'), request_body, hashlib.sha256).hexdigest()\nis_valid = hmac.compare_digest(computed_sig, signature_header)\n```\n\nAlways use constant-time comparison functions like `crypto.timingSafeEqual` or `hmac.compare_digest` to prevent timing attack vulnerabilities.",
+    "tokens": 105,
+    "createdAt": "2026-11-01T10:10:00.000Z",
+    "embedding": [-0.142, 0.124, 0.521, 0.089, 0.412, -0.056, 0.334, 0.178, -0.092, 0.412, 0.121, 0.345, -0.067, 0.289, 0.045, 0.412, -0.112, 0.287, 0.198, -0.045, 0.389, 0.154, -0.078, 0.321, 0.098, -0.124, 0.412, 0.178, -0.054, 0.367, 0.121, -0.089]
+  },
+  {
+    "id": "chunk-webhook-2",
+    "file": "webhooks.md",
+    "heading": "Retry Schedule & Backoff",
+    "content": "## Retry Schedule & Backoff\n\nIf your destination server returns any non-2xx status code or times out after 10 seconds, DocPilot queues the delivery for automatic retry with exponential backoff.\n\nRetry intervals:\n1. Attempt 1: Immediate\n2. Attempt 2: 5 minutes later\n3. Attempt 3: 30 minutes later\n4. Attempt 4: 2 hours later\n5. Attempt 5: 12 hours later\n\nAfter 5 failed attempts over 24 hours, the webhook event is marked as `failed` and sent to the dead-letter queue. You should design handlers to be idempotent using the event `id` payload field.",
+    "tokens": 112,
+    "createdAt": "2026-11-01T10:15:00.000Z",
+    "embedding": [-0.128, 0.112, 0.498, 0.076, 0.395, -0.048, 0.312, 0.165, -0.085, 0.392, 0.108, 0.328, -0.061, 0.274, 0.039, 0.394, -0.104, 0.271, 0.187, -0.041, 0.371, 0.142, -0.072, 0.305, 0.089, -0.115, 0.395, 0.165, -0.049, 0.348, 0.112, -0.081]
+  },
+  {
+    "id": "chunk-ratelimit-1",
+    "file": "rate-limits.md",
+    "heading": "Account Tier Limits",
+    "content": "# Rate Limits & Quotas\n\nAPI requests are governed by a sliding window rate limiter per client IP and organization token.\n\nTier limits:\n- Free Tier: 60 requests per minute (RPM)\n- Tier 1 (Standard): 100 requests per minute\n- Tier 2 (Pro): 600 requests per minute\n- Enterprise: Custom quota (up to 5,000 RPM)\n\nEvery response includes the following headers:\n- `X-RateLimit-Limit`: maximum allowed requests per minute\n- `X-RateLimit-Remaining`: requests remaining in the current minute window\n- `X-RateLimit-Reset`: Unix timestamp when quota resets\n\nExceeding limits triggers an `HTTP 429 Too Many Requests` with a `Retry-After` header indicating seconds to wait.",
+    "tokens": 128,
+    "createdAt": "2026-11-01T10:20:00.000Z",
+    "embedding": [0.412, -0.089, 0.124, 0.198, -0.145, 0.487, 0.098, -0.067, 0.378, 0.145, -0.098, 0.421, 0.187, -0.054, 0.312, 0.112, 0.398, -0.076, 0.154, 0.212, -0.121, 0.445, 0.087, -0.056, 0.342, 0.129, -0.087, 0.389, 0.165, -0.048, 0.289, 0.098]
+  },
+  {
+    "id": "chunk-ratelimit-2",
+    "file": "rate-limits.md",
+    "heading": "Requesting Quota Increases",
+    "content": "## Requesting Quota Increases\n\nIf your application anticipates heavy traffic spikes, migration workloads, or enterprise batch syncs, you can request an emergency or permanent quota increase.\n\nSubmit a request through the workspace dashboard under Settings > Quotas or contact support@docpilot.internal with:\n1. Your organization ID\n2. Target endpoint(s)\n3. Anticipated peak requests per second (RPS)\n4. Business justification\n\nEnterprise tier customers receive burst allowances permitting up to 2x nominal rate limits for periods under 15 minutes.",
+    "tokens": 98,
+    "createdAt": "2026-11-01T10:25:00.000Z",
+    "embedding": [0.387, -0.078, 0.115, 0.184, -0.134, 0.456, 0.089, -0.059, 0.354, 0.132, -0.089, 0.398, 0.174, -0.048, 0.295, 0.104, 0.374, -0.069, 0.142, 0.198, -0.112, 0.418, 0.079, -0.049, 0.321, 0.118, -0.079, 0.365, 0.152, -0.042, 0.271, 0.089]
+  },
+  {
+    "id": "chunk-sdk-1",
+    "file": "quickstart.md",
+    "heading": "Official SDK Installation",
+    "content": "# Quickstart: Client Libraries\n\nDocPilot maintains first-party libraries with built-in retry mechanisms, type safety, and automatic token refresh.\n\nInstall using your package manager:\n\n```bash\n# Node.js / TypeScript\nnpm install @docpilot/sdk\n\n# Python\npip install docpilot-python\n\n# Go\ngo get github.com/docpilot/docpilot-go\n```\n\nInitialize the client with your API key:\n\n```typescript\nimport { DocPilotClient } from '@docpilot/sdk';\nconst client = new DocPilotClient({ apiKey: process.env.DOCPILOT_API_KEY });\n```",
+    "tokens": 101,
+    "createdAt": "2026-11-01T10:30:00.000Z",
+    "embedding": [0.189, 0.245, 0.089, -0.145, 0.312, 0.112, 0.421, -0.089, 0.178, 0.298, -0.067, 0.345, 0.098, 0.412, -0.124, 0.267, 0.165, 0.218, 0.076, -0.132, 0.289, 0.098, 0.389, -0.078, 0.154, 0.276, -0.059, 0.318, 0.087, 0.384, -0.112, 0.245]
+  },
+  {
+    "id": "chunk-errors-1",
+    "file": "errors.md",
+    "heading": "Standard Error Response Schema",
+    "content": "# Error Handling\n\nDocPilot adheres to RFC 7807 (Problem Details for HTTP APIs). All error responses return `application/problem+json` with a consistent JSON envelope:\n\n```json\n{\n  \"error\": {\n    \"code\": \"rate_limit_exceeded\",\n    \"message\": \"Too many requests. Please wait 45 seconds.\",\n    \"param\": null,\n    \"doc_url\": \"https://docs.docpilot.io/errors/rate-limit\"\n  }\n}\n```\n\nCommon error codes include `invalid_token` (401), `forbidden_action` (403), `resource_not_found` (404), and `rate_limit_exceeded` (429).",
+    "tokens": 108,
+    "createdAt": "2026-11-01T10:35:00.000Z",
+    "embedding": [0.298, 0.045, -0.112, 0.312, 0.089, 0.214, -0.056, 0.389, 0.124, -0.145, 0.289, 0.076, 0.345, -0.089, 0.198, 0.212, 0.278, 0.039, -0.098, 0.289, 0.078, 0.198, -0.049, 0.356, 0.112, -0.134, 0.267, 0.068, 0.318, -0.078, 0.184, 0.198]
+  }
+]
